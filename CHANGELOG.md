@@ -4,6 +4,7 @@ Changes to the Stockholm transport departure screen, newest first.
 
 ## 2026-11-25
 
+- Sections are no longer split across two columns when they can all be kept whole. Before, the board preferred short columns, so a three-type location such as metro, train and bus could get bus split over two columns and an empty half column under the metro. Now each type gets its own column whenever it fits.
 - The column arrangement is no longer fixed while departures are still loading. Stops are fetched in batches over the first minute, and an arrangement made from the first batch could split a section across two columns and leave the rest of a column empty. A tidier arrangement now replaces an untidy one after 30 seconds instead of five minutes.
 - On wide screens, sections now stay in their columns when departures come and go. The board only rearranges when a departure would otherwise stay hidden for over a minute, or when a tidier arrangement has been possible for five minutes. A transport type that comes back, such as boats at a pier with hourly service, returns to the column it had before.
 - Automatic text size now waits three minutes, instead of 20 seconds, before growing, since a larger size can change the number of columns.

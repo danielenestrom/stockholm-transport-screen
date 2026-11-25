@@ -618,11 +618,15 @@ function layout(secs, C, R, tidy) {
     const need = alloc.reduce((n, a) => n + (a ? a + 1 : 0), 0);
     const kept = secs.map((s, i) => alloc[i] >= s.rows.length ? s : { mode: s.mode, rows:
       [...s.rows].sort((a, b) => a.dist - b.dist || a.sort - b.sort).slice(0, alloc[i]).sort((a, b) => a.sort - b.sort) });
-    // Start from the shortest column height that could work, so columns fill evenly.
+    // Start from the shortest column height that could work, so columns fill evenly. With `tidy`,
+    // a taller height that keeps every section in one column wins over a shorter one that splits one.
+    let split = null;
     for (let rb = Math.min(R, Math.max(4, Math.ceil(need / C))); rb <= R; rb++) {
       const cols = place(kept, alloc, C, rb, tidy);
-      if (cols) return cols;
+      if (cols && !(tidy && splitCount(cols))) return cols;
+      if (cols && !split) split = cols;
     }
+    if (split) return split;
   }
   return [[]];
 }
