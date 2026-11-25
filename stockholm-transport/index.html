@@ -1,0 +1,859 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Avgångar – Stockholm</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --u: 64px;       /* base unit from the viewport: header, footer, margins */
+  --row-h: 64px;   /* type scale of the departure rows */
+  --slot: 64px;    /* height of one row, stretched so the rows fill the board */
+  --bg: #000;
+  --amber: #ffb000;
+  --amber-dim: #b98200;
+  --white: #f4f4f4;
+  --grey: #8d8d8d;
+  --line: #2a2a2a;
+  --red: #ff4d3d;
+  --sans: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  --sign: var(--sans);
+}
+body.led { --sign: "Doto", var(--sans); }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--amber); font-family: var(--sans); }
+body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+body.scroll { height: auto; min-height: 100dvh; overflow: auto; }
+body.idle { cursor: none; }
+
+/* Header */
+#hd { display: flex; align-items: center; justify-content: space-between; gap: 1em;
+  padding: calc(var(--u) * .2) calc(var(--u) * .5); border-bottom: 2px solid var(--line); flex: none; }
+.ttl { display: flex; align-items: baseline; gap: .5em; min-width: 0; font-size: calc(var(--u) * .5); }
+#ttl { color: var(--white); font-weight: 700; }
+#loc { color: #a8a8a8; font-size: .75em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#clock { font-family: var(--sign); font-weight: 800; font-size: calc(var(--u) * .66); line-height: 1; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+
+/* Board */
+#board { flex: 1 1 auto; min-height: 0; display: grid; gap: 0 calc(var(--u) * .6);
+  padding: 0 calc(var(--u) * .5); overflow: hidden; align-content: start; }
+.col { min-width: 0; }
+.sec, .row { height: var(--slot); display: flex; align-items: center; gap: calc(var(--row-h) * .22); }
+.sec { color: var(--white); font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  font-size: calc(var(--row-h) * .34); border-bottom: 2px solid #4a4a4a; padding-top: calc(var(--row-h) * .2); }
+.sec svg { width: calc(var(--row-h) * .5); height: calc(var(--row-h) * .5); flex: none; --ic-cut: var(--bg); }
+.sec small { color: var(--grey); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: .8em; }
+.row { border-bottom: 1px solid var(--line); }
+.badge { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: .22em;
+  min-width: calc(var(--row-h) * 1.4); height: calc(var(--row-h) * .64); padding: 0 .4em; border-radius: calc(var(--row-h) * .1);
+  background: var(--c); color: #fff; font-weight: 700; font-size: calc(var(--row-h) * .36);
+  font-variant-numeric: tabular-nums; --ic-cut: var(--c); }
+.badge svg { width: .95em; height: .95em; flex: none; }
+.mid { flex: 1 1 auto; min-width: 0; }
+.dest { font-family: var(--sign); font-weight: 800; font-size: calc(var(--row-h) * .45); line-height: 1.1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dest.long { font-size: calc(var(--row-h) * .38); }
+.dest.xlong { font-size: calc(var(--row-h) * .32); }
+.from { color: #a8a8a8; font-size: calc(var(--row-h) * .285); line-height: 1.2;
+  display: flex; gap: .5em; white-space: nowrap; }
+.from .fs { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.from .fw { flex: none; display: inline-flex; align-items: center; gap: .15em; }
+.from .fw svg { width: .95em; height: .95em; }
+.from .cx { color: var(--red); }
+.times { flex: none; text-align: right; font-family: var(--sign); font-weight: 800; white-space: nowrap;
+  font-variant-numeric: tabular-nums; }
+.t1 { font-size: calc(var(--row-h) * .45); line-height: 1.1; }
+.t1.cx { color: var(--red); }
+.t2 { color: #d09400; font-size: calc(var(--row-h) * .3); line-height: 1.15; min-height: 1.15em; }
+body.led .dest, body.led .times, body.led #clock { text-shadow: 0 0 .3em rgba(255, 176, 0, .4); }
+body.led .t1.cx { text-shadow: 0 0 .3em rgba(255, 77, 61, .4); }
+.empty { grid-column: 1 / -1; align-self: center; text-align: center; color: var(--grey);
+  font-size: calc(var(--u) * .4); padding: 2em 1em; }
+body:not(.scroll) #board:has(.empty) { align-content: center; }
+
+/* Footer */
+#ft { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 2em;
+  padding: calc(var(--u) * .14) calc(var(--u) * .5); border-top: 2px solid var(--line);
+  font-size: calc(var(--u) * .3); min-height: calc(var(--u) * .66); }
+#msg { color: var(--amber); min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status { color: var(--grey); white-space: nowrap; flex: none; }
+#status.bad { color: var(--red); }
+
+/* Controls */
+.ctl { position: fixed; right: 14px; bottom: 14px; display: flex; gap: 8px; transition: opacity .4s; z-index: 5; }
+body.idle .ctl { opacity: 0; pointer-events: none; }
+.ctl button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid #555; background: #1b1b1b; color: #eee;
+  display: grid; place-items: center; cursor: pointer; padding: 0; }
+.ctl button:hover { background: #333; }
+.ctl svg { width: 22px; height: 22px; }
+
+/* Settings panel */
+#panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: #161616; color: #eee;
+  border-left: 1px solid #333; z-index: 10; overflow-y: auto; padding: 20px 22px 28px; font-size: 15px; cursor: auto; }
+#panel h2 { margin: 0 0 16px; font-size: 20px; display: flex; justify-content: space-between; align-items: center; }
+#panel h3 { margin: 22px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9a9a9a; font-weight: 600; }
+#panel label { display: block; }
+#panel input[type=text], #panel input[type=number], #panel select {
+  width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid #444; background: #0c0c0c; color: #eee; font: inherit; }
+#panel input[type=range] { width: 100%; accent-color: var(--amber); }
+#panel input[type=checkbox], #panel input[type=radio] { accent-color: var(--amber); width: 17px; height: 17px; margin: 0; }
+#panel .hint { color: #9a9a9a; font-size: 13px; margin-top: 6px; }
+#panel .opt { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+#panel .opt svg { width: 22px; height: 22px; --ic-cut: #161616; }
+#panel .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#panel .two label > span { display: block; font-size: 13px; color: #bbb; margin-bottom: 4px; }
+#panel .inline { display: flex; gap: 18px; }
+.btn { border: 1px solid #555; background: #262626; color: #eee; border-radius: 6px; padding: 9px 12px; font: inherit; cursor: pointer; }
+.btn:hover { background: #363636; }
+.btn.primary { background: var(--amber); border-color: var(--amber); color: #000; font-weight: 600; }
+.btn.x { border: 0; background: none; font-size: 24px; line-height: 1; padding: 0 4px; }
+#sug { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
+#sug li { padding: 9px 10px; cursor: pointer; border-top: 1px solid #2c2c2c; }
+#sug li:first-child { border-top: 0; }
+#sug li:hover, #sug li.on { background: #2c2c2c; }
+#sug small { color: #9a9a9a; }
+.rowbtns { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.actions { display: flex; gap: 8px; margin-top: 26px; flex-wrap: wrap; }
+
+@media (max-width: 699px) {
+  #hd, #board, #ft { padding-left: calc(var(--u) * .25); padding-right: calc(var(--u) * .25); }
+  .ttl { flex-direction: column; align-items: flex-start; gap: 0; font-size: calc(var(--u) * .42); }
+  .dest.long, .dest.xlong { font-size: calc(var(--row-h) * .32); }
+  .badge { min-width: calc(var(--row-h) * 1.1); font-size: calc(var(--row-h) * .3); }
+  .dest, .t1 { font-size: calc(var(--row-h) * .32); }
+  .t2 { font-size: calc(var(--row-h) * .22); }
+  #ft { flex-direction: column; align-items: flex-start; gap: .3em; }
+  #msg { white-space: normal; }
+}
+</style>
+</head>
+<body class="led">
+<header id="hd">
+  <div class="ttl"><span id="ttl"></span><span id="loc"></span></div>
+  <div id="clock"></div>
+</header>
+<main id="board"></main>
+<footer id="ft"><div id="msg"></div><div id="status"></div></footer>
+
+<div class="ctl">
+  <button id="bFs" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button id="bSet" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></button>
+</div>
+
+<aside id="panel" hidden>
+  <h2><span data-t="settings"></span><button class="btn x" id="bClose" type="button">×</button></h2>
+
+  <h3 data-t="place"></h3>
+  <input type="text" id="fPlace" autocomplete="off" spellcheck="false">
+  <ul id="sug" hidden></ul>
+  <div class="hint" id="placeNow"></div>
+  <div class="rowbtns"><button class="btn" id="bGeo" type="button" data-t="useMyLocation"></button></div>
+
+  <h3><span data-t="radius"></span>: <span id="rVal"></span></h3>
+  <input type="range" id="fR" min="100" max="2000" step="50">
+  <div class="hint" id="rHint"></div>
+
+  <h3 data-t="modes"></h3>
+  <div id="fModes"></div>
+
+  <h3 data-t="language"></h3>
+  <div class="inline">
+    <label class="opt"><input type="radio" name="lang" value="sv"> Svenska</label>
+    <label class="opt"><input type="radio" name="lang" value="en"> English</label>
+  </div>
+
+  <h3 data-t="display"></h3>
+  <div class="two">
+    <label><span data-t="window"></span>
+      <select id="fWin"><option value="30">30 min</option><option value="60">60 min</option><option value="90">90 min</option><option value="120">120 min</option></select></label>
+    <label><span data-t="textSize"></span>
+      <select id="fSize"><option value="a" data-t="sizeA"></option><option value="s" data-t="sizeS"></option><option value="m" data-t="sizeM"></option><option value="l" data-t="sizeL"></option><option value="x" data-t="sizeX"></option></select></label>
+  </div>
+  <label class="opt" style="margin-top:8px"><input type="checkbox" id="fWalk"> <span data-t="walkOpt"></span></label>
+  <div class="hint" data-t="walkHint" style="margin:0 0 6px 27px"></div>
+  <label class="opt"><input type="checkbox" id="fLed"> <span data-t="led"></span></label>
+  <label class="opt"><input type="checkbox" id="fMsg"> <span data-t="showMsg"></span></label>
+
+  <div class="actions">
+    <button class="btn primary" id="bCopy" type="button" data-t="copyLink"></button>
+    <button class="btn" id="bDone" type="button" data-t="done"></button>
+  </div>
+  <div class="hint" data-t="linkHint"></div>
+</aside>
+
+<script>
+(() => {
+'use strict';
+
+const API = 'https://transport.integration.sl.se/v1';
+const GEO = 'https://journeyplanner.integration.sl.se/v2/stop-finder';
+const MODES = ['metro', 'train', 'tram', 'bus', 'boat'];
+const BIT = { metro: 1, train: 2, tram: 4, bus: 8, boat: 16 };
+const AREA_BITS = { METROSTN: 1, RAILWSTN: 2 | 4, TRAMSTN: 4, BUSTERM: 8, SHIPBER: 16, FERRYBER: 16 };
+const API_MODE = { METRO: 'metro', TRAIN: 'train', TRAM: 'tram', BUS: 'bus', SHIP: 'boat', FERRY: 'boat' };
+const MAX_SITES = 12;        // stops with departures queried per refresh
+const WALK_M_PER_MIN = 75;   // straight-line metres covered per minute of walking
+const REFRESH_MS = 30000;   // shortest refresh interval; grows with the number of stops
+const IDLE_POLL_MS = 5 * 60000;   // stops with nothing to show are asked less often
+const SITES_TTL = 24 * 3600 * 1000;
+const DEFAULTS = { lat: 59.3312, lon: 18.0592, name: 'T-Centralen', r: 500, hide: [], lang: 'sv',
+                   win: 60, walk: true, size: 'a', led: true, msg: true };
+
+/* Line colours. Metro and commuter train follow the colours used on SL maps. */
+const COL = {
+  red: '#dc0d15', green: '#04a64b', blue: '#008dd0', train: '#ff49a5',
+  tvar: '#d77d00', nockeby: '#778da7', lidingo: '#b76020', city: '#747770',
+  roslag: '#9f599a', saltsjo: '#21b6ba', boat: '#00637c'
+};
+function lineColor(d) {
+  const g = d.group.toLowerCase(), n = d.line;
+  if (d.mode === 'metro') return /röd/.test(g) || /^1[34]/.test(n) ? COL.red : /grön/.test(g) || /^1[789]/.test(n) ? COL.green : COL.blue;
+  if (d.mode === 'train') return COL.train;
+  if (d.mode === 'tram') return /tvär/.test(g) ? COL.tvar : /nockeby/.test(g) ? COL.nockeby : /liding/.test(g) ? COL.lidingo
+    : /roslag/.test(g) ? COL.roslag : /saltsj/.test(g) ? COL.saltsjo : COL.city;
+  if (d.mode === 'bus') return /blå/.test(g) ? COL.blue : COL.red;
+  return COL.boat;
+}
+
+const ICON = {
+  metro: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="currentColor"/><path d="M6 6.4h12v3.2h-4.3V18h-3.4V9.600H6z" fill="var(--ic-cut,#000)"/></svg>',
+  train: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M9 1.500h6a3.500 3.500 0 0 1 3.500 3.500v10a3.500 3.500 0 0 1-2.700 3.400L18 22.500h-2.500l-1.400-3.500H9.900L8.500 22.500H6l2.200-4.100A3.500 3.500 0 0 1 5.500 15V5A3.500 3.500 0 0 1 9 1.500zM8 5.500V11h3.300V5.500zM12.700 5.500V11H16V5.500zM9 13.200a1.300 1.300 0 1 0 0 2.600 1.300 1.300 0 0 0 0-2.600zM15 13.200a1.300 1.300 0 1 0 0 2.600 1.300 1.300 0 0 0 0-2.600z"/></svg>',
+  tram: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M7 1h10v1.600h-4.200V5H15a3 3 0 0 1 3 3v9.500a2 2 0 0 1-2 2h-.200l1 2.500h-2.200l-.900-2.500h-3.400l-.900 2.500H7.200l1-2.500H8a2 2 0 0 1-2-2V8a3 3 0 0 1 3-3h2.200V2.600H7zM8 8v5.500h8V8zM9.300 15a1.100 1.100 0 1 0 0 2.200 1.100 1.100 0 0 0 0-2.200zM14.700 15a1.100 1.100 0 1 0 0 2.200 1.100 1.100 0 0 0 0-2.200z"/></svg>',
+  bus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M5.500 3h13A2.500 2.500 0 0 1 21 5.500V17a1 1 0 0 1-1 1h-.500v1.600a1.600 1.600 0 0 1-3.200 0V18H7.700v1.600a1.600 1.600 0 0 1-3.200 0V18H4a1 1 0 0 1-1-1V5.500A2.500 2.500 0 0 1 5.500 3zM5.200 6v5.800h13.600V6zM7 13.600a1.300 1.300 0 1 0 0 2.600 1.300 1.300 0 0 0 0-2.600zM17 13.600a1.300 1.300 0 1 0 0 2.600 1.300 1.300 0 0 0 0-2.600z"/><path fill="currentColor" d="M.800 7.500h1.400v4H.800zM21.800 7.500h1.400v4h-1.400z"/></svg>',
+  boat: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11 1.500h2v2.700h4.500v6.100L12 8.400l-5.500 1.900V4.200H11zM12 10.300l9.500 3.300-2.300 5.200c-1.100-.1-1.700-.9-2.700-.9-1.300 0-1.700 1-3 1s-1.700-1-3-1-1.700 1-3 1c-1 0-1.600.8-2.700.9L2.500 13.600z"/><path fill="none" stroke="currentColor" stroke-width="1.700" stroke-linecap="round" d="M2 21.800c1.500 0 1.800-1 3.300-1s1.800 1 3.300 1 1.800-1 3.400-1 1.800 1 3.400 1 1.800-1 3.300-1 1.800 1 3.300 1"/></svg>'
+};
+
+const WALK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="3.600" r="2.200" fill="currentColor"/><path fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" stroke-linejoin="round" d="M12.500 8.500 9 10.500v4M12.500 8.500l-1.500 6 3 3v5M11 14.500l-1.500 4-3 3.500M12.500 8.500l2 3.500 3.500 1.500"/></svg>';
+
+const T = {
+  sv: {
+    title: 'Avgångar', near: 'nära', docTitle: 'Avgångar – Stockholm',
+    metro: 'Tunnelbana', train: 'Pendeltåg', tram: 'Spårväg och lokalbana', bus: 'Buss', boat: 'Båt',
+    cont: 'forts.', now: 'Nu', min: 'min', cancelled: 'Inställd',
+    track: 'Spår', stand: 'Läge', berth: 'Kaj', walk: 'Gångtid',
+    loading: 'Hämtar avgångar …',
+    noStops: 'Inga hållplatser inom {r} m. Öka radien i inställningarna.',
+    noDeps: 'Inga avgångar de närmaste {n} minuterna.',
+    allHidden: 'Alla trafikslag är dolda. Välj minst ett i inställningarna.',
+    offline: 'Ingen kontakt med SL. Tiderna hämtades {t}.',
+    failed: 'Det gick inte att hämta avgångar från SL. Nytt försök görs automatiskt.',
+    updated: 'Uppdaterad {t}', source: 'Källa: SL via Trafiklab.se',
+    settings: 'Inställningar', place: 'Plats', placePh: 'Adress, hållplats eller koordinater',
+    useMyLocation: 'Använd min position', locating: 'Hämtar position …', geoFail: 'Positionen kunde inte hämtas.',
+    noHits: 'Inga träffar', myLocation: 'Min position',
+    radius: 'Radie', stopsIn: '{n} hållplatser inom radien', stopsCapped: '{n} hållplatser inom radien. Högst {max} med avgångar visas: stationer och bryggor först, sedan de närmaste busshållplatserna.',
+    modes: 'Trafikslag', language: 'Språk', display: 'Visning',
+    window: 'Visa avgångar inom',
+    walkOpt: 'Dölj avgångar som man inte hinner gå till', walkHint: 'Gångtiden räknas från avståndet till hållplatsen.',
+    textSize: 'Textstorlek', sizeA: 'Automatisk', sizeS: 'Liten', sizeM: 'Normal', sizeL: 'Stor', sizeX: 'Extra stor',
+    led: 'Skylttypsnitt (punktmatris)', showMsg: 'Visa störningsinformation',
+    copyLink: 'Kopiera länk', copied: 'Länken är kopierad', done: 'Klar',
+    linkHint: 'Länken innehåller plats och alla inställningar.',
+    fullscreen: 'Helskärm (F)', openSettings: 'Inställningar (S)'
+  },
+  en: {
+    title: 'Departures', near: 'near', docTitle: 'Departures – Stockholm',
+    metro: 'Metro', train: 'Commuter train', tram: 'Tram and light rail', bus: 'Bus', boat: 'Boat',
+    cont: 'cont.', now: 'Now', min: 'min', cancelled: 'Cancelled',
+    track: 'Platform', stand: 'Stand', berth: 'Berth', walk: 'Walking time',
+    loading: 'Loading departures …',
+    noStops: 'No stops within {r} m. Increase the radius in settings.',
+    noDeps: 'No departures in the next {n} minutes.',
+    allHidden: 'All transport types are hidden. Select at least one in settings.',
+    offline: 'Cannot reach SL. Times were fetched at {t}.',
+    failed: 'Could not fetch departures from SL. Retrying automatically.',
+    updated: 'Updated {t}', source: 'Source: SL via Trafiklab.se',
+    settings: 'Settings', place: 'Location', placePh: 'Address, stop or coordinates',
+    useMyLocation: 'Use my location', locating: 'Getting location …', geoFail: 'Could not get your location.',
+    noHits: 'No matches', myLocation: 'My location',
+    radius: 'Radius', stopsIn: '{n} stops within the radius', stopsCapped: '{n} stops within the radius. At most {max} with departures are shown: stations and piers first, then the nearest bus stops.',
+    modes: 'Transport types', language: 'Language', display: 'Display',
+    window: 'Show departures within',
+    walkOpt: 'Hide departures you cannot walk to in time', walkHint: 'Walking time is estimated from the distance to the stop.',
+    textSize: 'Text size', sizeA: 'Automatic', sizeS: 'Small', sizeM: 'Normal', sizeL: 'Large', sizeX: 'Extra large',
+    led: 'Sign typeface (dot matrix)', showMsg: 'Show disruption messages',
+    copyLink: 'Copy link', copied: 'Link copied', done: 'Done',
+    linkHint: 'The link contains the location and all settings.',
+    fullscreen: 'Full screen (F)', openSettings: 'Settings (S)'
+  }
+};
+const t = (k, vars) => {
+  let s = (T[cfg.lang] || T.sv)[k] || k;
+  if (vars) for (const v in vars) s = s.replace('{' + v + '}', vars[v]);
+  return s;
+};
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const pad = n => String(n).padStart(2, '0');
+
+/* ---------- Time: SL times are Stockholm wall-clock, so compare in that zone ---------- */
+const partsFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Stockholm', hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function nowWall() {
+  const p = {};
+  for (const x of partsFmt.formatToParts(new Date())) p[x.type] = +x.value;
+  return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+}
+function parseWall(s) {
+  const m = /^(\d+)-(\d+)-(\d+)T(\d+):(\d+)(?::(\d+))?/.exec(s || '');
+  return m ? Date.UTC(+m[1], m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) : NaN;
+}
+const hhmm = w => { const d = new Date(w); return pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()); };
+
+/* ---------- Settings: URL hash > saved settings > defaults ---------- */
+const STORE = 'stockholm-transport.settings';
+const coordName = (lat, lon) => lat.toFixed(4) + ', ' + lon.toFixed(4);
+
+function sanitize(s) {
+  const o = { ...DEFAULTS, ...s };
+  o.lat = +o.lat; o.lon = +o.lon;
+  if (!isFinite(o.lat) || !isFinite(o.lon) || Math.abs(o.lat) > 90 || Math.abs(o.lon) > 180) { o.lat = DEFAULTS.lat; o.lon = DEFAULTS.lon; o.name = DEFAULTS.name; }
+  o.name = String(o.name || coordName(o.lat, o.lon)).slice(0, 80);
+  o.r = clamp(Math.round(+o.r) || DEFAULTS.r, 50, 5000);
+  o.hide = (Array.isArray(o.hide) ? o.hide : []).filter(m => MODES.includes(m));
+  o.lang = o.lang === 'en' ? 'en' : 'sv';
+  o.win = clamp(Math.round(+o.win) || DEFAULTS.win, 10, 240);
+  o.size = ['a', 's', 'm', 'l', 'x'].includes(o.size) ? o.size : 'a';
+  o.walk = !!o.walk; o.led = !!o.led; o.msg = !!o.msg;
+  return o;
+}
+function loadStored() {
+  try { const s = JSON.parse(localStorage.getItem(STORE)); return s && typeof s === 'object' ? s : null; } catch (e) { return null; }
+}
+function readHash() {
+  const p = new URLSearchParams(location.hash.replace(/^#!?/, ''));
+  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg'];
+  if (!keys.some(k => p.has(k))) return null;
+  const o = {};
+  if (p.has('lat') && p.has('lon')) { o.lat = +p.get('lat'); o.lon = +p.get('lon'); o.name = p.get('name') || coordName(o.lat, o.lon); }
+  else if (p.has('addr')) o.addr = p.get('addr');
+  for (const k of ['r', 'win']) if (p.has(k)) o[k] = +p.get(k);
+  if (p.has('hide')) o.hide = p.get('hide').split(',').map(s => s.trim());
+  if (p.has('show')) { const show = p.get('show').split(',').map(s => s.trim()); o.hide = MODES.filter(m => !show.includes(m)); }
+  if (p.has('lang')) o.lang = p.get('lang');
+  if (p.has('size')) o.size = p.get('size');
+  for (const k of ['walk', 'led', 'msg']) if (p.has(k)) o[k] = !/^(0|false|no|off)$/i.test(p.get(k));
+  return o;
+}
+function hashFor(c) {
+  const p = new URLSearchParams();
+  p.set('lat', c.lat.toFixed(5)); p.set('lon', c.lon.toFixed(5)); p.set('name', c.name);
+  if (c.r !== DEFAULTS.r) p.set('r', c.r);
+  if (c.hide.length) p.set('hide', c.hide.join(','));
+  if (c.lang !== DEFAULTS.lang) p.set('lang', c.lang);
+  if (c.win !== DEFAULTS.win) p.set('win', c.win);
+  if (!c.walk) p.set('walk', 0);
+  if (c.size !== DEFAULTS.size) p.set('size', c.size);
+  if (!c.led) p.set('led', 0);
+  if (!c.msg) p.set('msg', 0);
+  return '#' + p.toString().replace(/%2C/g, ',');
+}
+function initialConfig() {
+  const stored = loadStored(), hash = readHash();
+  if (!hash) return { cfg: sanitize(stored || {}), first: !stored };
+  // A link fully defines the display; only a missing location falls back to the saved one.
+  const loc = stored && hash.lat == null ? { lat: stored.lat, lon: stored.lon, name: stored.name } : {};
+  return { cfg: sanitize({ ...loc, ...hash }), addr: hash.addr };
+}
+
+let cfg = DEFAULTS;
+let sites = null;                 // [[id, name, lat, lon], …]
+let near = [], nearTotal = 0;     // stops within the radius
+let depsBySite = new Map();       // site id -> departures
+let msgsBySite = new Map();       // site id -> disruption messages
+let pollAfter = new Map();       // site id -> earliest time for the next request
+let lastOk = 0, lastFailed = false, loaded = false, refreshSeq = 0, lastHtml = '';
+let auto = { scale: 0, key: '', since: 0 };   // automatic text size
+const AUTO_STEPS = [];                        // candidate sizes, largest first
+for (let f = 2; f > 0.92; f -= 0.05) AUTO_STEPS.push(+f.toFixed(2));   // never below 0.95: the board is read from a distance
+
+function persist() {
+  try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch (e) {}
+  const h = hashFor(cfg);
+  if (location.hash !== h) history.replaceState(null, '', h);
+}
+let refreshTimer;
+function update(patch, opts) {
+  const before = cfg;
+  cfg = sanitize({ ...cfg, ...patch });
+  if (!opts || opts.save !== false) persist();
+  applyStatic();
+  const refetch = before.lat !== cfg.lat || before.lon !== cfg.lon || before.r !== cfg.r || before.win !== cfg.win ||
+    before.hide.join() !== cfg.hide.join();
+  if (refetch) { pollAfter.clear(); clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 400); }
+  render();
+}
+
+/* ---------- Data ---------- */
+async function fetchJson(url, ms) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms || 15000);
+  try {
+    const res = await fetch(url, { signal: ctl.signal, cache: 'no-store' });
+    if (!res.ok) { const err = new Error('HTTP ' + res.status); err.status = res.status; throw err; }
+    return await res.json();
+  } finally { clearTimeout(timer); }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+/* SL limits the request rate, so stops are fetched two at a time and a 429 is retried twice. */
+async function fetchDepartures(list, seq) {
+  const out = new Array(list.length).fill(undefined);
+  let i = 0, asked = 0;
+  const worker = async () => {
+    while (i < list.length && asked < MAX_SITES && seq === refreshSeq) {
+      const k = i++, url = API + '/sites/' + list[k].id + '/departures?forecast=' + cfg.win;
+      if ((pollAfter.get(list[k].id) || 0) > Date.now()) continue;   // nothing to show there: asked less often
+      asked++;
+      out[k] = null;
+      for (const wait of [0, 2500, 5000]) {
+        if (wait) await sleep(wait);
+        try { out[k] = await fetchJson(url); break; }
+        catch (e) { if (e.status !== 429) break; }
+      }
+      await sleep(150);
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  return out;
+}
+/* Stop list with position and the transport types each stop serves. Fetched once a day. */
+async function loadSites() {
+  const KEY = 'stockholm-transport.sites.v2';
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+  const usable = cached && Array.isArray(cached.d);
+  if (usable && Date.now() - cached.t < (cached.full ? SITES_TTL : 3600000)) return cached.d;
+  try {
+    const [raw, points] = await Promise.all([
+      fetchJson(API + '/sites?expand=true', 30000),
+      fetchJson(API + '/stop-points', 45000).catch(() => null)   // only used to learn the transport types
+    ]);
+    const areaBits = new Map();
+    for (const p of points || []) {
+      const a = p.stop_area;
+      if (a && a.id) areaBits.set(a.id, (areaBits.get(a.id) || 0) | (AREA_BITS[a.type] || 0));
+    }
+    const d = raw.filter(s => s.lat && s.lon).map(s => [s.id, s.name, +(+s.lat).toFixed(5), +(+s.lon).toFixed(5),
+      (s.stop_areas || []).reduce((m, a) => m | (areaBits.get(a) || 0), 0)]);   // 0 = types unknown
+    try { localStorage.setItem(KEY, JSON.stringify({ t: Date.now(), full: !!points, d })); } catch (e) {}
+    return d;
+  } catch (e) {
+    if (usable) return cached.d;   // an old stop list is better than none
+    throw e;
+  }
+}
+function distance(lat1, lon1, lat2, lon2) {
+  const k = Math.PI / 180, a = Math.sin((lat2 - lat1) * k / 2) ** 2 +
+    Math.cos(lat1 * k) * Math.cos(lat2 * k) * Math.sin((lon2 - lon1) * k / 2) ** 2;
+  return 12742000 * Math.asin(Math.sqrt(a));
+}
+function findNear() {
+  const visible = MODES.reduce((m, k) => cfg.hide.includes(k) ? m : m | BIT[k], 0);
+  const all = [];
+  for (const s of sites || []) {
+    const d = distance(cfg.lat, cfg.lon, s[2], s[3]);
+    if (d > cfg.r || (s[4] && !(s[4] & visible))) continue;   // skip stops that only serve hidden types
+    all.push({ id: s[0], name: s[1], dist: d, bus: s[4] & visible & ~BIT.bus ? 0 : 1 });
+  }
+  // When there are more stops than can be queried, stations and piers go before bus stops.
+  all.sort((a, b) => a.bus - b.bus || a.dist - b.dist);
+  nearTotal = all.length;
+  near = all;
+}
+function normalize(d, site) {
+  const mode = API_MODE[d.line && d.line.transport_mode];
+  if (!mode) return null;
+  const when = parseWall(d.expected || d.scheduled);
+  if (!isFinite(when)) return null;
+  return {
+    id: (d.journey && d.journey.id) + ':' + (d.stop_point && d.stop_point.id) + ':' + d.scheduled,
+    mode, line: String(d.line.designation || ''), group: d.line.group_of_lines || '',
+    dest: d.destination || '', stop: (d.stop_area && d.stop_area.name) || site.name,
+    sp: (d.stop_point && d.stop_point.designation) || '', when,
+    cancelled: d.state === 'CANCELLED' || (d.deviations || []).some(x => x.consequence === 'CANCELLED'),
+    dist: site.dist
+  };
+}
+async function refresh() {
+  const seq = ++refreshSeq;
+  clearTimeout(refreshTimer);
+  try {
+    if (!sites) sites = await loadSites();
+  } catch (e) { lastFailed = true; loaded = true; render(); refreshTimer = setTimeout(refresh, REFRESH_MS); return; }
+  if (seq !== refreshSeq) return;
+  syncPanelHints();
+  const list = near;   // the settings panel can recompute `near` while requests are in flight
+  const results = await fetchDepartures(list, seq);
+  if (seq !== refreshSeq) return;
+  const ids = new Set(list.map(s => s.id));
+  for (const id of [...depsBySite.keys()]) if (!ids.has(id)) { depsBySite.delete(id); msgsBySite.delete(id); }
+  let ok = 0, tried = 0;
+  results.forEach((r, i) => {
+    if (r === undefined) return;   // not due yet
+    tried++;
+    if (!r) return;                // failed: keep the previous times for this stop
+    ok++;
+    const site = list[i];
+    const deps = (r.departures || []).map(d => normalize(d, site)).filter(Boolean);
+    depsBySite.set(site.id, deps);
+    msgsBySite.set(site.id, (r.stop_deviations || []).map(m => m && m.message).filter(Boolean));
+  });
+  // A stop that adds nothing (no departures, or only ones a nearer stop already lists, such as a
+  // second entrance to the same station) is asked less often and frees its place for another stop.
+  const seen = new Set();
+  let freed = 0;
+  list.map((site, i) => ({ site, i })).sort((a, b) => a.site.dist - b.site.dist).forEach(({ site, i }) => {
+    const deps = depsBySite.get(site.id) || [];
+    const adds = deps.some(d => !cfg.hide.includes(d.mode) && !seen.has(d.id));
+    deps.forEach(d => seen.add(d.id));
+    if (results[i] && !adds) { pollAfter.set(site.id, Date.now() + IDLE_POLL_MS); depsBySite.set(site.id, []); freed++; }
+  });
+  lastFailed = tried > 0 && ok === 0;
+  if (!lastFailed) lastOk = Date.now();
+  loaded = true;
+  render();
+  // Places were freed and more stops are waiting: fetch those soon instead of after a full interval.
+  const waiting = freed && list.some((s, i) => results[i] === undefined && !((pollAfter.get(s.id) || 0) > Date.now()));
+  refreshTimer = setTimeout(refresh, waiting ? 4000 : clamp(tried * 5000, REFRESH_MS, 60000));
+}
+
+/* ---------- Board ---------- */
+function buildSections(now) {
+  const seen = new Set(), groups = new Map();
+  const byDistance = [...near].sort((a, b) => a.dist - b.dist);   // a departure listed by two stops counts for the nearer
+  for (const site of byDistance) for (const d of depsBySite.get(site.id) || []) {
+    if (cfg.hide.includes(d.mode) || seen.has(d.id)) continue;
+    seen.add(d.id);
+    const mins = (d.when - now) / 60000;
+    if (mins < -0.5 || mins > cfg.win) continue;
+    if (cfg.walk && mins < walkMin(d.dist)) continue;   // cannot be reached on foot
+    const key = [d.mode, d.line, d.dest, d.stop, d.sp].join('|');
+    let g = groups.get(key);
+    if (!g) groups.set(key, g = { ...d, deps: [] });
+    g.deps.push(d);
+  }
+  // The same line and destination can leave from several stops in range: keep the nearest one.
+  const best = new Map();
+  for (const g of groups.values()) {
+    const key = [g.mode, g.line, g.dest].join('|'), cur = best.get(key);
+    if (!cur || g.dist < cur.dist) best.set(key, g);
+  }
+  const rows = [...best.values()];
+  for (const g of rows) {
+    g.deps.sort((a, b) => a.when - b.when);
+    g.live = g.deps.filter(d => !d.cancelled);
+    g.sort = (g.live[0] || g.deps[0]).when;
+  }
+  rows.sort((a, b) => a.sort - b.sort || a.line.localeCompare(b.line, 'sv', { numeric: true }));
+  return MODES.map(mode => ({ mode, rows: rows.filter(r => r.mode === mode) })).filter(s => s.rows.length);
+}
+
+const walkMin = dist => Math.max(1, Math.ceil(dist / WALK_M_PER_MIN));
+
+function waterfill(counts, budget) {
+  const a = counts.map(() => 0);
+  let left = Math.max(0, budget), active = counts.map((c, i) => i).filter(i => counts[i] > 0);
+  while (left > 0 && active.length) {
+    const share = Math.max(1, Math.floor(left / active.length));
+    for (const i of active) { if (!left) break; const g = Math.min(share, counts[i] - a[i], left); a[i] += g; left -= g; }
+    active = active.filter(i => a[i] < counts[i]);
+  }
+  return a;
+}
+/* Puts sections into columns of R slots. With `tidy`, a section that does not fit in what is left of a
+   column but fits in a whole one starts a new column instead of being split. Returns null if more than
+   C columns are needed. */
+function place(secs, alloc, C, R, tidy) {
+  const cols = [[]];
+  let used = 0;
+  const next = () => { cols.push([]); used = 0; };
+  for (let i = 0; i < secs.length; i++) {
+    const n = alloc[i];
+    if (!n) continue;
+    const left = R - used;
+    if (used && (left < Math.min(3, n + 1) || (tidy && n + 1 > left && n + 1 <= R))) next();
+    cols[cols.length - 1].push({ head: secs[i].mode }); used++;
+    for (let j = 0; j < alloc[i]; j++) {
+      if (used >= R) { next(); cols[cols.length - 1].push({ head: secs[i].mode, cont: true }); used++; }
+      cols[cols.length - 1].push({ row: secs[i].rows[j] }); used++;
+    }
+  }
+  return cols.length <= C ? cols : null;
+}
+function layout(secs, C, R, tidy) {
+  const counts = secs.map(s => s.rows.length);
+  if (!isFinite(R)) return place(secs, counts.map(c => Math.min(c, 12)), 1, R);
+  const total = counts.reduce((n, c) => n + c + 1, 0);
+  for (let budget = Math.min(total, C * R) - secs.length; budget > 0; budget--) {
+    const alloc = waterfill(counts, budget);
+    const need = alloc.reduce((n, a) => n + (a ? a + 1 : 0), 0);
+    const kept = secs.map((s, i) => alloc[i] >= s.rows.length ? s : { mode: s.mode, rows:
+      [...s.rows].sort((a, b) => a.dist - b.dist || a.sort - b.sort).slice(0, alloc[i]).sort((a, b) => a.sort - b.sort) });
+    // Start from the shortest column height that could work, so columns fill evenly.
+    for (let rb = Math.min(R, Math.max(4, Math.ceil(need / C))); rb <= R; rb++) {
+      const cols = place(kept, alloc, C, rb, tidy);
+      if (cols) return cols;
+    }
+  }
+  return [[]];
+}
+
+function fmtTime(when, now, short) {
+  const mins = Math.floor((when - now) / 60000);
+  if (mins < 1) return t('now');
+  if (mins < 60) return short ? String(mins) : mins + ' ' + t('min');
+  return hhmm(when);
+}
+function rowHtml(g, now) {
+  const spLabel = g.sp ? (g.mode === 'bus' ? t('stand') : g.mode === 'boat' ? t('berth') : t('track')) + ' ' + g.sp : '';
+  const firstLive = g.live[0];
+  const lost = g.deps.filter(d => d.cancelled && (!firstLive || d.when < firstLive.when)).slice(0, 2);
+  const from = '<span class="fs">' + [esc(g.stop), esc(spLabel)].filter(Boolean).join(' · ') +
+    (firstLive && lost.length ? ' · <span class="cx">' + t('cancelled') + ' ' + lost.map(d => hhmm(d.when)).join(', ') + '</span>' : '') +
+    '</span><span class="fw" title="' + t('walk') + '">' + WALK_ICON + walkMin(g.dist) + ' min</span>';
+  const t1 = firstLive ? '<div class="t1">' + fmtTime(firstLive.when, now) + '</div>' : '<div class="t1 cx">' + t('cancelled') + '</div>';
+  const later = g.live.slice(1, 3);
+  const t2 = later.map(d => fmtTime(d.when, now, true)).join(' · ');
+  return '<div class="row"><span class="badge" style="--c:' + lineColor(g) + '">' + ICON[g.mode] + '<b>' + esc(g.line) + '</b></span>' +
+    '<div class="mid"><div class="dest' + (g.dest.length > 19 ? ' xlong' : g.dest.length > 16 ? ' long' : '') + '">' + esc(g.dest) + '</div><div class="from">' + from + '</div></div>' +
+    '<div class="times">' + t1 + '<div class="t2">' + t2 + '</div></div></div>';
+}
+
+function render() {
+  const now = nowWall();
+  $('clock').textContent = hhmm(now);
+
+  // Sizing. The header and footer follow the viewport; the row type size is chosen so that
+  // everything fits ("auto") or fixed by the text size setting.
+  const W = innerWidth, H = innerHeight, narrow = W < 700, root = document.documentElement.style;
+  const base = narrow ? 58 : clamp(Math.min(H, W * .6) * .064, 36, 104);
+  root.setProperty('--u', Math.round(base) + 'px');
+  document.body.classList.toggle('scroll', narrow);
+  const board = $('board'), boardH = board.clientHeight;
+  const sections = buildSections(now);
+  const grid = rowH => ({ C: clamp(Math.floor(W / (rowH * 8.7)), 1, 4), R: Math.max(3, Math.floor(boardH / rowH)) });
+  const counts = sections.map(s => s.rows.length);
+  const fits = (f, tidy) => { const g = grid(Math.round(base * f)); return !!place(sections, counts, g.C, g.R, tidy); };
+  let scale = { s: .85, m: 1, l: 1.25, x: 1.5 }[cfg.size] || 1;
+  if (cfg.size === 'a' && !narrow) {
+    // Largest size at which every row fits. A slightly smaller size is preferred if it keeps sections whole.
+    const flow = AUTO_STEPS.find(f => fits(f, false)) || AUTO_STEPS[AUTO_STEPS.length - 1];
+    const best = AUTO_STEPS.find(f => f <= flow && f >= flow - 0.11 && fits(f, true)) || flow;
+    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join()].join('|');
+    // Shrink at once when rows no longer fit; grow only after the larger size has fitted for a while,
+    // so the text does not change size every time a departure comes or goes.
+    if (!auto.scale || key !== auto.key || best < auto.scale || !sections.length) auto = { scale: best, key, since: 0 };
+    else if (best > auto.scale) {
+      if (!auto.since) auto.since = Date.now();
+      else if (Date.now() - auto.since > 20000) auto = { scale: best, key, since: 0 };
+    } else auto.since = 0;
+    scale = auto.scale;
+  }
+  const rowH = Math.round(base * scale);
+  const C = narrow ? 1 : grid(rowH).C;
+  const R = narrow ? Infinity : grid(rowH).R;
+  root.setProperty('--row-h', rowH + 'px');
+
+  let html, slot = rowH;
+  const offline = lastFailed || (lastOk && Date.now() - lastOk > 150000);
+  if (!loaded) html = '<div class="empty">' + t('loading') + '</div>';
+  else if (sections.length) {
+    const cols = layout(sections, C, R, !narrow && fits(scale, true));
+    // Stretch the rows so the longest column fills the board height (type size stays the same).
+    if (!narrow) slot = clamp(boardH / Math.max(1, ...cols.map(c => c.length)), rowH, rowH * 1.45);
+    board.style.gridTemplateColumns = 'repeat(' + Math.min(C, Math.max(cols.length, narrow ? 1 : Math.min(C, 2))) + ', minmax(0, 1fr))';
+    html = cols.map(col => '<div class="col">' + col.map(it => it.head
+      ? '<div class="sec">' + ICON[it.head] + '<span>' + t(it.head) + (it.cont ? ' <small>' + t('cont') + '</small>' : '') + '</span></div>'
+      : rowHtml(it.row, now)).join('') + '</div>').join('');
+  } else {
+    board.style.gridTemplateColumns = '1fr';
+    const text = lastFailed && !lastOk ? t('failed')
+      : cfg.hide.length === MODES.length ? t('allHidden')
+      : !near.length ? t('noStops', { r: cfg.r })
+      : t('noDeps', { n: cfg.win });
+    html = '<div class="empty">' + text + '</div>';
+  }
+  root.setProperty('--slot', slot + 'px');
+  if (html !== lastHtml) { board.innerHTML = html; lastHtml = html; }
+
+  // Footer: disruption messages rotate, status on the right.
+  const msgs = cfg.msg ? [...new Set([].concat(...msgsBySite.values()))].slice(0, 8) : [];
+  const msg = msgs.length ? '⚠ ' + msgs[Math.floor(Date.now() / 9000) % msgs.length] : '';
+  if ($('msg').textContent !== msg) $('msg').textContent = msg;
+  const fetched = lastOk ? hhmm(now - (Date.now() - lastOk)) : '';
+  const status = offline && lastOk ? t('offline', { t: fetched }) : lastOk ? t('updated', { t: fetched }) + ' · ' + t('source') : '';
+  $('status').textContent = status;
+  $('status').classList.toggle('bad', !!(offline && lastOk));
+}
+
+/* ---------- Static texts and settings panel ---------- */
+function applyStatic() {
+  document.documentElement.lang = cfg.lang;
+  document.title = t('docTitle');
+  document.body.classList.toggle('led', cfg.led);
+  $('ttl').textContent = t('title');
+  $('loc').textContent = t('near') + ' ' + cfg.name;
+  document.querySelectorAll('[data-t]').forEach(el => { el.textContent = t(el.dataset.t); });
+  $('fPlace').placeholder = t('placePh');
+  $('bFs').title = t('fullscreen'); $('bSet').title = t('openSettings');
+  $('bFs').setAttribute('aria-label', t('fullscreen')); $('bSet').setAttribute('aria-label', t('openSettings'));
+  $('fModes').querySelectorAll('span[data-m]').forEach(el => { el.textContent = t(el.dataset.m); });
+  syncPanel();
+}
+function syncPanel() {
+  $('fR').value = cfg.r; $('rVal').textContent = cfg.r + ' m';
+  $('fWin').value = String(cfg.win); $('fWalk').checked = cfg.walk; $('fSize').value = cfg.size;
+  $('fLed').checked = cfg.led; $('fMsg').checked = cfg.msg;
+  document.querySelectorAll('input[name=lang]').forEach(el => { el.checked = el.value === cfg.lang; });
+  $('fModes').querySelectorAll('input').forEach(el => { el.checked = !cfg.hide.includes(el.value); });
+  $('placeNow').textContent = cfg.name + ' (' + coordName(cfg.lat, cfg.lon) + ')';
+  syncPanelHints();
+}
+function syncPanelHints() {
+  if (!sites) { $('rHint').textContent = ''; return; }
+  findNear();
+  $('rHint').textContent = nearTotal > MAX_SITES ? t('stopsCapped', { n: nearTotal, max: MAX_SITES }) : t('stopsIn', { n: nearTotal });
+}
+function openPanel(open) {
+  $('panel').hidden = !open;
+  if (open) { syncPanel(); $('fPlace').value = ''; hideSug(); }
+}
+
+/* Place search */
+let sugItems = [], geoSeq = 0, geoTimer;
+const parseCoords = q => {
+  const m = /^\s*(-?\d{1,2}(?:[.,]\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:[.,]\d+)?)\s*$/.exec(q);
+  if (!m) return null;
+  const lat = +m[1].replace(',', '.'), lon = +m[2].replace(',', '.');
+  return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon, name: coordName(lat, lon) } : null;
+};
+async function geocode(q) {
+  const data = await fetchJson(GEO + '?name_sf=' + encodeURIComponent(q) + '&type_sf=any&any_obj_filter_sf=46');
+  return (data.locations || []).filter(l => Array.isArray(l.coord) && l.coord.length === 2)
+    .map(l => ({ lat: +l.coord[0], lon: +l.coord[1], name: l.disassembledName || l.name, q: l.matchQuality || 0,
+                 where: l.parent && l.parent.name && l.parent.name !== (l.disassembledName || l.name) ? l.parent.name : '' }))
+    // Equal matches (the same street name in several municipalities): nearest to the current location first.
+    .sort((a, b) => b.q - a.q || distance(cfg.lat, cfg.lon, a.lat, a.lon) - distance(cfg.lat, cfg.lon, b.lat, b.lon));
+}
+function hideSug() { $('sug').hidden = true; sugItems = []; }
+function showSug(items, note) {
+  sugItems = items;
+  $('sug').innerHTML = items.length
+    ? items.map((s, i) => '<li data-i="' + i + '">' + esc(s.name) + (s.where ? ' <small>' + esc(s.where) + '</small>' : '') + '</li>').join('')
+    : '<li><small>' + esc(note || t('noHits')) + '</small></li>';
+  $('sug').hidden = false;
+}
+async function searchPlace() {
+  const q = $('fPlace').value.trim(), seq = ++geoSeq;
+  const c = parseCoords(q);
+  if (c) return showSug([c]);
+  if (q.length < 3) return hideSug();
+  try {
+    const list = await geocode(q);
+    if (seq === geoSeq) showSug(list.slice(0, 6));
+  } catch (e) { if (seq === geoSeq) showSug([]); }
+}
+function pickPlace(s) {
+  if (!s) return;
+  $('fPlace').value = ''; hideSug();
+  update({ lat: s.lat, lon: s.lon, name: s.name });
+}
+
+function buildPanel() {
+  $('fModes').innerHTML = MODES.map(m =>
+    '<label class="opt"><input type="checkbox" value="' + m + '">' + ICON[m] + '<span data-m="' + m + '"></span></label>').join('');
+  $('fModes').addEventListener('change', () => {
+    update({ hide: [...$('fModes').querySelectorAll('input')].filter(el => !el.checked).map(el => el.value) });
+  });
+  $('fPlace').addEventListener('input', () => { clearTimeout(geoTimer); geoTimer = setTimeout(searchPlace, 300); });
+  $('fPlace').addEventListener('keydown', e => { if (e.key === 'Enter' && sugItems.length) pickPlace(sugItems[0]); });
+  $('sug').addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (li) pickPlace(sugItems[+li.dataset.i]); });
+  $('bGeo').addEventListener('click', () => {
+    if (!navigator.geolocation) { $('placeNow').textContent = t('geoFail'); return; }
+    $('placeNow').textContent = t('locating');
+    navigator.geolocation.getCurrentPosition(
+      p => update({ lat: p.coords.latitude, lon: p.coords.longitude, name: t('myLocation') }),
+      () => { $('placeNow').textContent = t('geoFail'); },
+      { enableHighAccuracy: true, timeout: 10000 });
+  });
+  $('fR').addEventListener('input', () => update({ r: +$('fR').value }));
+  $('fWin').addEventListener('change', () => update({ win: +$('fWin').value }));
+  $('fWalk').addEventListener('change', () => update({ walk: $('fWalk').checked }));
+  $('fSize').addEventListener('change', () => update({ size: $('fSize').value }));
+  $('fLed').addEventListener('change', () => update({ led: $('fLed').checked }));
+  $('fMsg').addEventListener('change', () => update({ msg: $('fMsg').checked }));
+  document.querySelectorAll('input[name=lang]').forEach(el => el.addEventListener('change', () => update({ lang: el.value })));
+  $('bCopy').addEventListener('click', async () => {
+    persist();
+    try { await navigator.clipboard.writeText(location.href); $('bCopy').textContent = t('copied'); }
+    catch (e) { prompt(t('copyLink'), location.href); }
+    setTimeout(() => { $('bCopy').textContent = t('copyLink'); }, 2000);
+  });
+  $('bDone').addEventListener('click', () => openPanel(false));
+  $('bClose').addEventListener('click', () => openPanel(false));
+  $('bSet').addEventListener('click', () => openPanel($('panel').hidden));
+  $('bFs').addEventListener('click', toggleFullscreen);
+}
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+}
+
+/* ---------- Kiosk behaviour ---------- */
+let idleTimer;
+function wake() {
+  document.body.classList.remove('idle');
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => { if ($('panel').hidden) document.body.classList.add('idle'); }, 4000);
+}
+async function keepAwake() {
+  try { if (navigator.wakeLock && document.visibilityState === 'visible') await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+
+/* ---------- Start ---------- */
+async function start() {
+  const init = initialConfig();
+  cfg = init.cfg;
+  buildPanel();
+  applyStatic();
+  render();
+  if (init.addr) {   // a link may carry an address instead of coordinates
+    try { const hit = (await geocode(init.addr))[0]; if (hit) cfg = sanitize({ ...cfg, lat: hit.lat, lon: hit.lon, name: hit.name }); } catch (e) {}
+    applyStatic();
+  }
+  if (readHash()) history.replaceState(null, '', hashFor(cfg));
+  if (init.first) openPanel(true);   // nothing chosen yet: ask for a location
+  refresh();
+  setInterval(render, 1000);
+  addEventListener('resize', render);
+  addEventListener('hashchange', () => {
+    const h = readHash();
+    if (!h) return;
+    const apply = loc => update({ ...DEFAULTS, lat: cfg.lat, lon: cfg.lon, name: cfg.name, ...h, ...loc }, { save: false });
+    if (h.addr) geocode(h.addr).then(r => apply(r[0] ? { lat: r[0].lat, lon: r[0].lon, name: r[0].name } : {}), () => apply({}));
+    else apply({});
+  });
+  addEventListener('keydown', e => {
+    if (e.target.matches && e.target.matches('input, select, textarea')) { if (e.key === 'Escape') openPanel(false); return; }
+    if (e.key === 'Escape') openPanel(false);
+    else if (e.key === 's' || e.key === 'S') openPanel($('panel').hidden);
+    else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  });
+  ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, wake, { passive: true }));
+  wake();
+  keepAwake();
+  document.addEventListener('visibilitychange', () => { keepAwake(); if (document.visibilityState === 'visible') refresh(); });
+}
+start();
+})();
+</script>
+</body>
+</html>
