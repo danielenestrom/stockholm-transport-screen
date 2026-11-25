@@ -105,6 +105,7 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 #panel input[type=checkbox], #panel input[type=radio] { accent-color: var(--amber); width: 17px; height: 17px; margin: 0; }
 #panel .hint { color: #9a9a9a; font-size: 13px; margin-top: 6px; }
 #panel .opt { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+#panel .opt.off { opacity: .45; cursor: default; }
 #panel .opt svg { width: 22px; height: 22px; --ic-cut: #161616; }
 #panel .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 #panel .two label > span { display: block; font-size: 13px; color: #bbb; margin-bottom: 4px; }
@@ -157,6 +158,8 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
   <ul id="sug" hidden></ul>
   <div class="hint" id="placeNow"></div>
   <div class="rowbtns"><button class="btn" id="bGeo" type="button" data-t="useMyLocation"></button></div>
+  <label class="opt" id="oFollow" style="margin-top:8px"><input type="checkbox" id="fFollow"> <span data-t="follow"></span></label>
+  <div class="hint" id="followHint" style="margin:0 0 0 27px"></div>
 
   <h3><span data-t="radius"></span>: <span id="rVal"></span></h3>
   <input type="range" id="fR" min="100" max="2000" step="50">
@@ -252,6 +255,9 @@ const T = {
     settings: 'Inställningar', place: 'Plats', placePh: 'Adress, hållplats eller koordinater',
     useMyLocation: 'Använd min position', locating: 'Hämtar position …', geoFail: 'Positionen kunde inte hämtas.',
     noHits: 'Inga träffar', myLocation: 'Min position',
+    follow: 'Följ min position', followOn: 'Positionen uppdateras när sidan öppnas eller visas igen.',
+    followNeedsGeo: 'Tryck på Använd min position och tillåt platsåtkomst för att slå på.',
+    followNoGeo: 'Webbläsaren kan inte hämta din position.',
     radius: 'Radie', stopsIn: '{n} hållplatser inom radien', stopsCapped: '{n} hållplatser inom radien. Högst {max} med avgångar visas: stationer och bryggor först, sedan de närmaste busshållplatserna.',
     modes: 'Trafikslag', language: 'Språk', display: 'Visning',
     window: 'Visa avgångar inom',
@@ -278,6 +284,9 @@ const T = {
     settings: 'Settings', place: 'Location', placePh: 'Address, stop or coordinates',
     useMyLocation: 'Use my location', locating: 'Getting location …', geoFail: 'Could not get your location.',
     noHits: 'No matches', myLocation: 'My location',
+    follow: 'Follow my location', followOn: 'The location is updated when the page is opened or shown again.',
+    followNeedsGeo: 'Tap Use my location and allow location access to turn this on.',
+    followNoGeo: 'This browser cannot get your location.',
     radius: 'Radius', stopsIn: '{n} stops within the radius', stopsCapped: '{n} stops within the radius. At most {max} with departures are shown: stations and piers first, then the nearest bus stops.',
     modes: 'Transport types', language: 'Language', display: 'Display',
     window: 'Show departures within',
@@ -368,7 +377,9 @@ function initialConfig() {
   if (!hash) return { cfg: sanitize(stored || {}), first: !stored };
   // A link fully defines the display; only a missing location falls back to the saved one.
   const loc = stored && hash.lat == null ? { lat: stored.lat, lon: stored.lon, name: stored.name } : {};
-  return { cfg: sanitize({ ...loc, ...hash }), addr: hash.addr };
+  // A link to somewhere else than this device's own saved place is a chosen place: stop following.
+  const elsewhere = hash.addr || (hash.lat != null && !(stored && distance(hash.lat, hash.lon, +stored.lat, +stored.lon) < 50));
+  return { cfg: sanitize({ ...loc, ...hash }), addr: hash.addr, elsewhere };
 }
 
 let cfg = DEFAULTS;
@@ -722,6 +733,7 @@ function syncPanel() {
   document.querySelectorAll('input[name=lang]').forEach(el => { el.checked = el.value === cfg.lang; });
   $('fModes').querySelectorAll('input').forEach(el => { el.checked = !cfg.hide.includes(el.value); });
   $('placeNow').textContent = cfg.name + ' (' + coordName(cfg.lat, cfg.lon) + ')';
+  syncFollow();
   syncPanelHints();
 }
 function syncPanelHints() {
@@ -771,7 +783,51 @@ async function searchPlace() {
 function pickPlace(s) {
   if (!s) return;
   $('fPlace').value = ''; hideSug();
+  setFollow(false);   // a chosen place stays put
   update({ lat: s.lat, lon: s.lon, name: s.name });
+}
+
+/* Follow my location: a per-device choice, kept out of links so a shared link or a wall
+   screen never starts tracking. The position is only read when the browser already allows
+   it, so opening the page never shows a permission prompt. */
+const FOLLOW_KEY = 'stockholm-transport.follow';
+const FOLLOW_MIN_MS = 30000;    // focus, visibility and pageshow often fire together
+const FOLLOW_MOVE_M = 75;       // smaller moves are GPS jitter
+const FOLLOW_MAX_ACC_M = 1500;  // a fix this coarse would pick the wrong stops
+let follow = false, geoPerm = navigator.geolocation ? 'unknown' : 'unsupported', lastFollow = 0;
+try { follow = localStorage.getItem(FOLLOW_KEY) === '1'; } catch (e) {}
+function setFollow(on) {
+  follow = on;
+  try { localStorage.setItem(FOLLOW_KEY, on ? '1' : '0'); } catch (e) {}
+  syncFollow();
+}
+const canFollow = () => geoPerm === 'granted';
+function syncFollow() {
+  $('fFollow').disabled = !canFollow();
+  $('fFollow').checked = follow && canFollow();
+  $('oFollow').classList.toggle('off', !canFollow());
+  $('followHint').textContent = geoPerm === 'unsupported' ? t('followNoGeo') : canFollow() ? t('followOn') : t('followNeedsGeo');
+}
+async function watchPermission() {
+  if (!navigator.geolocation || !navigator.permissions || !navigator.permissions.query) return;
+  try {
+    const st = await navigator.permissions.query({ name: 'geolocation' });
+    const apply = () => { geoPerm = st.state; syncFollow(); followNow(true); };
+    st.addEventListener('change', apply);
+    apply();
+  } catch (e) {}
+}
+function geoError(e) { if (e && e.code === 1) { geoPerm = 'denied'; syncFollow(); } }
+function followNow(force) {
+  if (!follow || !canFollow() || document.visibilityState !== 'visible') return;
+  if (!force && Date.now() - lastFollow < FOLLOW_MIN_MS) return;
+  lastFollow = Date.now();
+  navigator.geolocation.getCurrentPosition(p => {
+    const { latitude: lat, longitude: lon, accuracy } = p.coords;
+    if (!follow || accuracy > FOLLOW_MAX_ACC_M) return;
+    if (distance(cfg.lat, cfg.lon, lat, lon) < FOLLOW_MOVE_M && cfg.name === t('myLocation')) return;
+    update({ lat, lon, name: t('myLocation') });
+  }, geoError, { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 });
 }
 
 function buildPanel() {
@@ -787,10 +843,16 @@ function buildPanel() {
     if (!navigator.geolocation) { $('placeNow').textContent = t('geoFail'); return; }
     $('placeNow').textContent = t('locating');
     navigator.geolocation.getCurrentPosition(
-      p => update({ lat: p.coords.latitude, lon: p.coords.longitude, name: t('myLocation') }),
-      () => { $('placeNow').textContent = t('geoFail'); },
+      p => {
+        geoPerm = 'granted';   // also covers browsers without the Permissions API
+        lastFollow = Date.now();
+        update({ lat: p.coords.latitude, lon: p.coords.longitude, name: t('myLocation') });
+        setFollow(true);
+      },
+      e => { $('placeNow').textContent = t('geoFail'); geoError(e); },
       { enableHighAccuracy: true, timeout: 10000 });
   });
+  $('fFollow').addEventListener('change', () => { setFollow($('fFollow').checked); followNow(true); });
   $('fR').addEventListener('input', () => update({ r: +$('fR').value }));
   $('fWin').addEventListener('change', () => update({ win: +$('fWin').value }));
   $('fWalk').addEventListener('change', () => update({ walk: $('fWalk').checked }));
@@ -838,12 +900,15 @@ async function start() {
   }
   if (readHash()) history.replaceState(null, '', hashFor(cfg));
   if (init.first) openPanel(true);   // nothing chosen yet: ask for a location
+  if (init.elsewhere) setFollow(false);
   refresh();
+  watchPermission();
   setInterval(render, 1000);
   addEventListener('resize', render);
   addEventListener('hashchange', () => {
     const h = readHash();
     if (!h) return;
+    if (h.addr || (h.lat != null && distance(h.lat, h.lon, cfg.lat, cfg.lon) >= 50)) setFollow(false);
     const apply = loc => update({ ...DEFAULTS, lat: cfg.lat, lon: cfg.lon, name: cfg.name, ...h, ...loc }, { save: false });
     if (h.addr) geocode(h.addr).then(r => apply(r[0] ? { lat: r[0].lat, lon: r[0].lon, name: r[0].name } : {}), () => apply({}));
     else apply({});
@@ -857,7 +922,9 @@ async function start() {
   ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, wake, { passive: true }));
   wake();
   keepAwake();
-  document.addEventListener('visibilitychange', () => { keepAwake(); if (document.visibilityState === 'visible') refresh(); });
+  document.addEventListener('visibilitychange', () => { keepAwake(); if (document.visibilityState === 'visible') { refresh(); followNow(); } });
+  addEventListener('pageshow', e => { if (e.persisted) { refresh(); followNow(); } });   // restored from the back/forward cache
+  addEventListener('focus', () => followNow());   // a laptop window that stayed visible behind another one
 }
 start();
 })();

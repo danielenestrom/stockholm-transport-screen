@@ -53,6 +53,15 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 
 Keyboard: `S` opens settings, `F` toggles full screen.
 
+## Follow my location
+
+On a phone, tablet or laptop, "Följ min position" in the settings panel moves the board to the device's current position each time the page is opened or shown again (unlocking the phone, switching back to the tab or window). The page itself is not reloaded; only departures are fetched again.
+
+- "Använd min position" turns following on. Choosing an address or stop, or opening a link to another place, turns it off.
+- The setting is greyed out until the browser allows location access, and the page only reads the position when access is already allowed, so it never shows a permission prompt on its own. Safari forgets the permission after about a day if the site is set to "Ask"; tap "Använd min position" again to resume.
+- Moves under 75 metres are ignored, and the position is read at most every 30 seconds.
+- The setting is saved on the device and is not part of the link, so a shared link or a wall screen never follows anyone's location.
+
 ## Line colours
 
 Colours are set in the `COL` table in `index.html`. Metro lines use their line colour, commuter trains pink, buses red or blue (blåbuss), and each tram and light rail line its own colour. Boats use a single teal that is not an SL colour.
@@ -66,7 +75,7 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 ## Privacy
 
 - The page has no server of its own and no analytics. Settings and the stop list are saved in the browser's local storage.
-- The browser sends stop ids and place searches to SL. The chosen coordinates are not sent; distances are calculated in the browser.
+- The browser sends stop ids and place searches to SL. The chosen coordinates are not sent; distances are calculated in the browser. The same applies to the device position when following is on.
 - The dot-matrix typeface, [Doto](https://github.com/oliverlalan/Doto) (SIL Open Font License 1.1), is loaded from Google Fonts, so Google sees the visitor's IP address. To avoid that, host the font file yourself and change the stylesheet link in `index.html`.
 
 ## Deploy
