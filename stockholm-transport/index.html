@@ -114,6 +114,9 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 .btn.primary { background: var(--amber); border-color: var(--amber); color: #000; font-weight: 600; }
 .btn.x { border: 0; background: none; font-size: 24px; line-height: 1; padding: 0 4px; }
 #sug { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
+#panel .credit { margin-top: 28px; padding-top: 14px; border-top: 1px solid #2c2c2c; color: #9a9a9a; font-size: 13px; }
+#panel .credit a { color: #ccc; }
+#panel .credit a:hover { color: var(--amber); }
 #sug li { padding: 9px 10px; cursor: pointer; border-top: 1px solid #2c2c2c; }
 #sug li:first-child { border-top: 0; }
 #sug li:hover, #sug li.on { background: #2c2c2c; }
@@ -185,6 +188,8 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
     <button class="btn" id="bDone" type="button" data-t="done"></button>
   </div>
   <div class="hint" data-t="linkHint"></div>
+
+  <footer class="credit"><span data-t="madeBy"></span> Daniel Eneström · <a href="https://github.com/danielenestrom/stockholm-transport-screen" target="_blank" rel="noopener" data-t="sourceCode"></a></footer>
 </aside>
 
 <script>
@@ -255,7 +260,8 @@ const T = {
     led: 'Skylttypsnitt (punktmatris)', showMsg: 'Visa störningsinformation',
     copyLink: 'Kopiera länk', copied: 'Länken är kopierad', done: 'Klar',
     linkHint: 'Länken innehåller plats och alla inställningar.',
-    fullscreen: 'Helskärm (F)', openSettings: 'Inställningar (S)'
+    fullscreen: 'Helskärm (F)', openSettings: 'Inställningar (S)',
+    madeBy: 'Gjord av', sourceCode: 'Källkod på GitHub'
   },
   en: {
     title: 'Departures', near: 'near', docTitle: 'Departures – Stockholm',
@@ -280,7 +286,8 @@ const T = {
     led: 'Sign typeface (dot matrix)', showMsg: 'Show disruption messages',
     copyLink: 'Copy link', copied: 'Link copied', done: 'Done',
     linkHint: 'The link contains the location and all settings.',
-    fullscreen: 'Full screen (F)', openSettings: 'Settings (S)'
+    fullscreen: 'Full screen (F)', openSettings: 'Settings (S)',
+    madeBy: 'Made by', sourceCode: 'Source code on GitHub'
   }
 };
 const t = (k, vars) => {
