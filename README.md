@@ -68,7 +68,8 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 
 ## Layout rules
 
-- Automatic text size picks the largest size at which every row fits, and never goes below a size readable from a distance. If rows still do not fit, those from the farthest stops are dropped first.
+- Automatic text size picks the largest size at which every row fits, and never goes below a size readable from a distance. If rows still do not fit, those from the farthest stops are dropped first. The text shrinks at once when rows no longer fit, but only grows after the larger size has fitted for three minutes.
+- Sections keep their columns between updates. The board is rearranged when a departure would stay hidden for more than a minute, when a tidier arrangement (no empty column, fewer split sections) has been possible for five minutes, or when the screen size, location or settings change.
 - Walking time is the straight-line distance to the stop at 75 metres per minute. Departures that leave sooner than that are hidden.
 - A line and destination served by several stops in range is shown for the nearest stop only.
 

@@ -390,6 +390,7 @@ let msgsBySite = new Map();       // site id -> disruption messages
 let pollAfter = new Map();       // site id -> earliest time for the next request
 let lastOk = 0, lastFailed = false, loaded = false, refreshSeq = 0, lastHtml = '';
 let auto = { scale: 0, key: '', since: 0 };   // automatic text size
+const AUTO_GROW_MS = 3 * 60000;               // a larger size must have fitted this long before it is used
 const AUTO_STEPS = [];                        // candidate sizes, largest first
 for (let f = 2; f > 0.92; f -= 0.05) AUTO_STEPS.push(+f.toFixed(2));   // never below 0.95: the board is read from a distance
 
@@ -624,6 +625,69 @@ function layout(secs, C, R, tidy) {
   return [[]];
 }
 
+/* Sticky columns. A fresh layout is worked out on every render, but the previous assignment of
+   sections to columns is kept as long as it shows as many rows, so sections do not move to
+   another column each time a line comes or goes. */
+let plan = null;   // { key, cols: [[mode, …], …], lossSince, untidySince }
+const PLAN_LOSS_MS = 60000;        // rows hidden that a fresh layout would show
+const PLAN_UNTIDY_MS = 5 * 60000;  // an empty column or a split a fresh layout would avoid
+const rowCount = cols => cols.reduce((n, c) => n + c.filter(it => it.row).length, 0);
+const splitCount = cols => cols.reduce((n, c) => n + c.filter(it => it.cont).length, 0);
+function fromPlan(secs, planCols, R) {
+  // A section that is not in the plan (boats at a pier that runs once an hour, say) goes into the
+  // column with the most room, in transport type order, rather than starting a fresh layout.
+  // It is added to the plan, so it comes back to the same column next time.
+  const len = new Map(secs.map(s => [s.mode, s.rows.length + 1]));
+  for (const s of secs) {
+    if (planCols.some(c => c.includes(s.mode))) continue;
+    const fill = planCols.map(c => c.reduce((n, m) => n + (len.get(m) || 0), 0));
+    const ci = fill.indexOf(Math.min(...fill));
+    planCols[ci].push(s.mode);
+    planCols[ci].sort((a, b) => MODES.indexOf(a) - MODES.indexOf(b));
+  }
+  const rem = new Map(secs.map(s => [s.mode, s.rows.length]));
+  const take = planCols.map(() => []);
+  planCols.forEach((modes, ci) => {
+    let used = 0;
+    for (const m of modes) {
+      if (!rem.get(m)) continue;
+      const n = Math.min(rem.get(m), R - used - 1);
+      if (n < 1) continue;
+      take[ci].push([m, n]); used += n + 1; rem.set(m, rem.get(m) - n);
+    }
+  });
+  // Rows that do not fit: drop those from the farthest stops, as a fresh layout does.
+  const kept = new Map(secs.map(s => {
+    const n = s.rows.length - rem.get(s.mode);
+    return [s.mode, n >= s.rows.length ? s.rows.slice()
+      : [...s.rows].sort((a, b) => a.dist - b.dist || a.sort - b.sort).slice(0, n).sort((a, b) => a.sort - b.sort)];
+  }));
+  const started = new Set();
+  return take.map(parts => {
+    const col = [];
+    for (const [m, n] of parts) {
+      col.push({ head: m, cont: started.has(m) });
+      started.add(m);
+      for (const row of kept.get(m).splice(0, n)) col.push({ row });
+    }
+    return col;
+  });
+}
+function stickyLayout(secs, C, R, tidy, key) {
+  const fresh = layout(secs, C, R, tidy);
+  const reused = plan && plan.key === key ? fromPlan(secs, plan.cols, R) : null;
+  const now = Date.now();
+  if (reused) {
+    const loss = rowCount(reused) < rowCount(fresh);
+    const untidy = (reused.some(c => !c.length) && !fresh.some(c => !c.length)) || splitCount(reused) > splitCount(fresh);
+    plan.lossSince = loss ? plan.lossSince || now : 0;
+    plan.untidySince = untidy ? plan.untidySince || now : 0;
+    if ((!loss || now - plan.lossSince < PLAN_LOSS_MS) && (!untidy || now - plan.untidySince < PLAN_UNTIDY_MS)) return reused;
+  }
+  plan = { key, cols: fresh.map(c => c.filter(it => it.head).map(it => it.head)), lossSince: 0, untidySince: 0 };
+  return fresh;
+}
+
 function fmtTime(when, now, short) {
   const mins = Math.floor((when - now) / 60000);
   if (mins < 1) return t('now');
@@ -667,11 +731,11 @@ function render() {
     const best = AUTO_STEPS.find(f => f <= flow && f >= flow - 0.11 && fits(f, true)) || flow;
     const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join()].join('|');
     // Shrink at once when rows no longer fit; grow only after the larger size has fitted for a while,
-    // so the text does not change size every time a departure comes or goes.
+    // so the text size, and with it the columns, do not change every time a departure comes or goes.
     if (!auto.scale || key !== auto.key || best < auto.scale || !sections.length) auto = { scale: best, key, since: 0 };
     else if (best > auto.scale) {
       if (!auto.since) auto.since = Date.now();
-      else if (Date.now() - auto.since > 20000) auto = { scale: best, key, since: 0 };
+      else if (Date.now() - auto.since > AUTO_GROW_MS) auto = { scale: best, key, since: 0 };
     } else auto.since = 0;
     scale = auto.scale;
   }
@@ -684,7 +748,8 @@ function render() {
   const offline = lastFailed || (lastOk && Date.now() - lastOk > 150000);
   if (!loaded) html = '<div class="empty">' + t('loading') + '</div>';
   else if (sections.length) {
-    const cols = layout(sections, C, R, !narrow && fits(scale, true));
+    const cols = narrow ? layout(sections, C, R, false)
+      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join()].join('|'));
     // Stretch the rows so the longest column fills the board height (type size stays the same).
     if (!narrow) slot = clamp(boardH / Math.max(1, ...cols.map(c => c.length)), rowH, rowH * 1.45);
     board.style.gridTemplateColumns = 'repeat(' + Math.min(C, Math.max(cols.length, narrow ? 1 : Math.min(C, 2))) + ', minmax(0, 1fr))';
