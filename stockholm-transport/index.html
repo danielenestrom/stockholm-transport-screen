@@ -389,6 +389,7 @@ let depsBySite = new Map();       // site id -> departures
 let msgsBySite = new Map();       // site id -> disruption messages
 let pollAfter = new Map();       // site id -> earliest time for the next request
 let lastOk = 0, lastFailed = false, loaded = false, refreshSeq = 0, lastHtml = '';
+let warm = false;                 // every stop in range has been asked once since the place or settings changed
 let auto = { scale: 0, key: '', since: 0 };   // automatic text size
 const AUTO_GROW_MS = 3 * 60000;               // a larger size must have fitted this long before it is used
 const AUTO_STEPS = [];                        // candidate sizes, largest first
@@ -407,7 +408,7 @@ function update(patch, opts) {
   applyStatic();
   const refetch = before.lat !== cfg.lat || before.lon !== cfg.lon || before.r !== cfg.r || before.win !== cfg.win ||
     before.hide.join() !== cfg.hide.join();
-  if (refetch) { pollAfter.clear(); clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 400); }
+  if (refetch) { pollAfter.clear(); warm = false; clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 400); }
   render();
 }
 
@@ -541,6 +542,7 @@ async function refresh() {
   render();
   // Places were freed and more stops are waiting: fetch those soon instead of after a full interval.
   const waiting = freed && list.some((s, i) => results[i] === undefined && !((pollAfter.get(s.id) || 0) > Date.now()));
+  if (!waiting) warm = true;
   refreshTimer = setTimeout(refresh, waiting ? 4000 : clamp(tried * 5000, REFRESH_MS, 60000));
 }
 
@@ -630,7 +632,7 @@ function layout(secs, C, R, tidy) {
    another column each time a line comes or goes. */
 let plan = null;   // { key, cols: [[mode, …], …], lossSince, untidySince }
 const PLAN_LOSS_MS = 60000;        // rows hidden that a fresh layout would show
-const PLAN_UNTIDY_MS = 5 * 60000;  // an empty column or a split a fresh layout would avoid
+const PLAN_UNTIDY_MS = 30000;      // an empty column or a split a fresh layout would avoid
 const rowCount = cols => cols.reduce((n, c) => n + c.filter(it => it.row).length, 0);
 const splitCount = cols => cols.reduce((n, c) => n + c.filter(it => it.cont).length, 0);
 function fromPlan(secs, planCols, R) {
@@ -675,6 +677,8 @@ function fromPlan(secs, planCols, R) {
 }
 function stickyLayout(secs, C, R, tidy, key) {
   const fresh = layout(secs, C, R, tidy);
+  // Departures arrive in batches over the first minute; an arrangement made from half of them would stick.
+  if (!warm) { plan = null; return fresh; }
   const reused = plan && plan.key === key ? fromPlan(secs, plan.cols, R) : null;
   const now = Date.now();
   if (reused) {
