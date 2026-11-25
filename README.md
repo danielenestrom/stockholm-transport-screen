@@ -2,6 +2,8 @@
 
 A full-screen departure board for SL metro, commuter trains, trams, buses and boats near a chosen location in Stockholm. It is a single static page meant for a wall-mounted screen, and works on any static host.
 
+![The board showing metro, bus and boat departures near Slussen](docs/screenshot.png)
+
 This is an independent project. It is not made or endorsed by SL (Storstockholms Lokaltrafik) or Trafiklab.
 
 ## Files
