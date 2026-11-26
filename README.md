@@ -51,6 +51,7 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 | `led` | `0` switches from the dot-matrix typeface to a plain one | on |
 | `msg` | `0` hides disruption messages | on |
 | `group` | `0` groups departures by transport type instead of by stop | on |
+| `cx` | `1` also shows cancelled departures | off |
 
 Keyboard: `S` opens settings, `F` toggles full screen.
 
@@ -77,6 +78,7 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 - Sections keep their columns between updates, once every stop in range has been asked for departures. The board is rearranged when a departure would stay hidden for more than a minute, when a tidier arrangement (no empty column, fewer split sections) has been possible for 30 seconds, or when the screen size, location or settings change.
 - Walking time is the straight-line distance to the stop at 75 metres per minute. Departures that leave sooner than that are hidden.
 - A line and destination served by several stops in range is shown for the nearest stop only.
+- Cancelled departures are hidden, and a line with only cancelled departures in the time window is left out. With "Visa inställda avgångar" turned on (`cx=1`), a row whose next departures are cancelled shows "Inställd" and the cancelled times.
 
 ## Privacy
 

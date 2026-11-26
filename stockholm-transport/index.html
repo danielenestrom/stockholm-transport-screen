@@ -189,6 +189,8 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
   <div class="hint" data-t="walkHint" style="margin:0 0 6px 27px"></div>
   <label class="opt"><input type="checkbox" id="fGroup"> <span data-t="groupOpt"></span></label>
   <div class="hint" data-t="groupHint" style="margin:0 0 6px 27px"></div>
+  <label class="opt"><input type="checkbox" id="fCx"> <span data-t="cxOpt"></span></label>
+  <div class="hint" data-t="cxHint" style="margin:0 0 6px 27px"></div>
   <label class="opt"><input type="checkbox" id="fLed"> <span data-t="led"></span></label>
   <label class="opt"><input type="checkbox" id="fMsg"> <span data-t="showMsg"></span></label>
 
@@ -217,7 +219,7 @@ const REFRESH_MS = 30000;   // shortest refresh interval; grows with the number 
 const IDLE_POLL_MS = 5 * 60000;   // stops with nothing to show are asked less often
 const SITES_TTL = 24 * 3600 * 1000;
 const DEFAULTS = { lat: 59.3312, lon: 18.0592, name: 'T-Centralen', r: 500, hide: [], lang: 'sv',
-                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true };
+                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false };
 
 /* Line colours. Metro and commuter train follow the colours used on SL maps. */
 const COL = {
@@ -271,6 +273,7 @@ const T = {
     textSize: 'Textstorlek', sizeA: 'Automatisk', sizeS: 'Liten', sizeM: 'Normal', sizeL: 'Stor', sizeX: 'Extra stor',
     led: 'Skylttypsnitt (punktmatris)', showMsg: 'Visa störningsinformation',
     groupOpt: 'Gruppera avgångar per hållplats', groupHint: 'Varje hållplats får ett eget block, närmast först.',
+    cxOpt: 'Visa inställda avgångar', cxHint: 'Annars visas bara avgångar som går.',
     copyLink: 'Kopiera länk', copied: 'Länken är kopierad', done: 'Klar',
     linkHint: 'Länken innehåller plats och alla inställningar.',
     fullscreen: 'Helskärm (F)', openSettings: 'Inställningar (S)',
@@ -301,6 +304,7 @@ const T = {
     textSize: 'Text size', sizeA: 'Automatic', sizeS: 'Small', sizeM: 'Normal', sizeL: 'Large', sizeX: 'Extra large',
     led: 'Sign typeface (dot matrix)', showMsg: 'Show disruption messages',
     groupOpt: 'Group departures by stop', groupHint: 'Each stop gets its own block, nearest first.',
+    cxOpt: 'Show cancelled departures', cxHint: 'Otherwise only departures that run are shown.',
     copyLink: 'Copy link', copied: 'Link copied', done: 'Done',
     linkHint: 'The link contains the location and all settings.',
     fullscreen: 'Full screen (F)', openSettings: 'Settings (S)',
@@ -346,7 +350,7 @@ function sanitize(s) {
   o.lang = o.lang === 'en' ? 'en' : 'sv';
   o.win = clamp(Math.round(+o.win) || DEFAULTS.win, 10, 240);
   o.size = ['a', 's', 'm', 'l', 'x'].includes(o.size) ? o.size : 'a';
-  o.walk = !!o.walk; o.led = !!o.led; o.msg = !!o.msg; o.group = !!o.group;
+  o.walk = !!o.walk; o.led = !!o.led; o.msg = !!o.msg; o.group = !!o.group; o.cx = !!o.cx;
   return o;
 }
 function loadStored() {
@@ -354,7 +358,7 @@ function loadStored() {
 }
 function readHash() {
   const p = new URLSearchParams(location.hash.replace(/^#!?/, ''));
-  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group'];
+  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx'];
   if (!keys.some(k => p.has(k))) return null;
   const o = {};
   if (p.has('lat') && p.has('lon')) { o.lat = +p.get('lat'); o.lon = +p.get('lon'); o.name = p.get('name') || coordName(o.lat, o.lon); }
@@ -364,7 +368,7 @@ function readHash() {
   if (p.has('show')) { const show = p.get('show').split(',').map(s => s.trim()); o.hide = MODES.filter(m => !show.includes(m)); }
   if (p.has('lang')) o.lang = p.get('lang');
   if (p.has('size')) o.size = p.get('size');
-  for (const k of ['walk', 'led', 'msg', 'group']) if (p.has(k)) o[k] = !/^(0|false|no|off)$/i.test(p.get(k));
+  for (const k of ['walk', 'led', 'msg', 'group', 'cx']) if (p.has(k)) o[k] = !/^(0|false|no|off)$/i.test(p.get(k));
   return o;
 }
 function hashFor(c) {
@@ -379,6 +383,7 @@ function hashFor(c) {
   if (!c.led) p.set('led', 0);
   if (!c.msg) p.set('msg', 0);
   if (!c.group) p.set('group', 0);
+  if (c.cx) p.set('cx', 1);
   return '#' + p.toString().replace(/%2C/g, ',');
 }
 function initialConfig() {
@@ -562,6 +567,7 @@ function buildSections(now) {
   for (const site of byDistance) for (const d of depsBySite.get(site.id) || []) {
     if (cfg.hide.includes(d.mode) || seen.has(d.id)) continue;
     seen.add(d.id);
+    if (d.cancelled && !cfg.cx) continue;   // SL often lists a cancelled trip next to its replacement
     const mins = (d.when - now) / 60000;
     if (mins < -0.5 || mins > cfg.win) continue;
     if (cfg.walk && mins < walkMin(d.dist)) continue;   // cannot be reached on foot
@@ -780,7 +786,7 @@ function render() {
     // Largest size at which every row fits. A slightly smaller size is preferred if it keeps sections whole.
     const flow = AUTO_STEPS.find(f => fits(f, false)) || AUTO_STEPS[AUTO_STEPS.length - 1];
     const best = AUTO_STEPS.find(f => f <= flow && f >= flow - 0.11 && fits(f, true)) || flow;
-    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group].join('|');
+    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx].join('|');
     // Shrink at once when rows no longer fit; grow only after the larger size has fitted for a while,
     // so the text size, and with it the columns, do not change every time a departure comes or goes.
     if (!auto.scale || key !== auto.key || best < auto.scale || !sections.length) auto = { scale: best, key, since: 0 };
@@ -800,7 +806,7 @@ function render() {
   if (!loaded) html = '<div class="empty">' + t('loading') + '</div>';
   else if (sections.length) {
     const cols = narrow ? layout(sections, C, R, false)
-      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group].join('|'));
+      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx].join('|'));
     // Stretch the rows so the longest column fills the board height (type size stays the same).
     if (!narrow) slot = clamp(boardH / Math.max(1, ...cols.map(c => c.length)), rowH, rowH * 1.45);
     board.style.gridTemplateColumns = 'repeat(' + Math.min(C, Math.max(cols.length, narrow ? 1 : Math.min(C, 2))) + ', minmax(0, 1fr))';
@@ -845,7 +851,7 @@ function applyStatic() {
 function syncPanel() {
   $('fR').value = cfg.r; $('rVal').textContent = cfg.r + ' m';
   $('fWin').value = String(cfg.win); $('fWalk').checked = cfg.walk; $('fSize').value = cfg.size;
-  $('fLed').checked = cfg.led; $('fMsg').checked = cfg.msg; $('fGroup').checked = cfg.group;
+  $('fLed').checked = cfg.led; $('fMsg').checked = cfg.msg; $('fGroup').checked = cfg.group; $('fCx').checked = cfg.cx;
   document.querySelectorAll('input[name=lang]').forEach(el => { el.checked = el.value === cfg.lang; });
   $('fModes').querySelectorAll('input').forEach(el => { el.checked = !cfg.hide.includes(el.value); });
   $('placeNow').textContent = cfg.name + ' (' + coordName(cfg.lat, cfg.lon) + ')';
@@ -988,6 +994,7 @@ function buildPanel() {
   $('fSize').addEventListener('change', () => update({ size: $('fSize').value }));
   $('fLed').addEventListener('change', () => update({ led: $('fLed').checked }));
   $('fMsg').addEventListener('change', () => update({ msg: $('fMsg').checked }));
+  $('fCx').addEventListener('change', () => update({ cx: $('fCx').checked }));
   $('fGroup').addEventListener('change', () => update({ group: $('fGroup').checked }));
   document.querySelectorAll('input[name=lang]').forEach(el => el.addEventListener('change', () => update({ lang: el.value })));
   $('bCopy').addEventListener('click', async () => {
