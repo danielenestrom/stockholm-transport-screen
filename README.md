@@ -52,6 +52,7 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 | `msg` | `0` hides disruption messages | on |
 | `group` | `0` groups departures by transport type instead of by stop | on |
 | `cx` | `1` also shows cancelled departures | off |
+| `plat` | `0` hides platform, stand and berth | on |
 
 Keyboard: `S` opens settings, `F` toggles full screen.
 
