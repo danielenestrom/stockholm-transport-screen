@@ -457,21 +457,24 @@ const MARQ_PX_PER_S = 40;             // scroll speed for names that do not fit 
 function fitDests(board) {
   for (const el of board.querySelectorAll('.dest')) {
     const span = el.firstElementChild;
+    // A name counts as fitting only with some space left before the times, so it never touches them.
+    const room = () => el.clientWidth - parseFloat(getComputedStyle(el).fontSize) * .4;
     el.classList.remove('long', 'xlong', 'marq');
     span.style.letterSpacing = '';
-    if (span.offsetWidth <= el.clientWidth) continue;
+    if (span.offsetWidth <= room()) continue;
     el.classList.add('long');
-    if (span.offsetWidth <= el.clientWidth) continue;
+    if (span.offsetWidth <= room()) continue;
     el.classList.replace('long', 'xlong');
-    const over = span.offsetWidth - el.clientWidth;
-    if (over <= 0) continue;
+    if (span.offsetWidth <= room()) continue;
     // Only a few pixels too wide: tighten the letters a little instead of scrolling.
     const chars = span.textContent.length, size = parseFloat(getComputedStyle(el).fontSize);
-    if (chars > 1 && (over + 1) / (chars - 1) <= size * .06) {
-      span.style.letterSpacing = -((over + 1) / (chars - 1)).toFixed(2) + 'px';
-      if (span.offsetWidth <= el.clientWidth) continue;
+    const tight = (span.offsetWidth - room() + 1) / Math.max(1, chars - 1);
+    if (chars > 1 && tight <= size * .06) {
+      span.style.letterSpacing = -tight.toFixed(2) + 'px';
+      if (span.offsetWidth <= room()) continue;
       span.style.letterSpacing = '';
     }
+    const over = span.offsetWidth - el.clientWidth;
     const dur = Math.max(6, over / MARQ_PX_PER_S / .6);   // 60 % of each pass is moving, the rest pausing
     el.style.setProperty('--shift', over + 'px');
     el.style.setProperty('--dur', dur.toFixed(1) + 's');
