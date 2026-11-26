@@ -118,6 +118,11 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 #panel .two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 #panel .two label > span { display: block; font-size: 13px; color: #bbb; margin-bottom: 4px; }
 #panel .inline { display: flex; gap: 18px; }
+#fDirs .ld { display: flex; gap: 10px; align-items: flex-start; padding: 4px 0; border-top: 1px solid #262626; }
+#fDirs .ld:first-child { border-top: 0; }
+#fDirs .badge { --row-h: 34px; margin-top: 4px; }
+#fDirs .ldo { min-width: 0; }
+#fDirs .opt { padding: 4px 0; }
 .btn { border: 1px solid #555; background: #262626; color: #eee; border-radius: 6px; padding: 9px 12px; font: inherit; cursor: pointer; }
 .btn:hover { background: #363636; }
 .btn.primary { background: var(--amber); border-color: var(--amber); color: #000; font-weight: 600; }
@@ -176,6 +181,10 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
   <h3 data-t="modes"></h3>
   <div id="fModes"></div>
 
+  <h3 data-t="dirsTitle"></h3>
+  <div class="hint" data-t="dirsHint" style="margin:0 0 6px"></div>
+  <div id="fDirs"></div>
+
   <h3 data-t="language"></h3>
   <div class="inline">
     <label class="opt"><input type="radio" name="lang" value="sv"> Svenska</label>
@@ -227,7 +236,7 @@ const REFRESH_MS = 30000;   // shortest refresh interval; grows with the number 
 const IDLE_POLL_MS = 5 * 60000;   // stops with nothing to show are asked less often
 const SITES_TTL = 24 * 3600 * 1000;
 const DEFAULTS = { lat: 59.3312, lon: 18.0592, name: 'T-Centralen', r: 500, hide: [], lang: 'sv',
-                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false, plat: true, split: true };
+                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false, plat: true, split: true, hidedir: [] };
 
 /* Line colours. Metro and commuter train follow the colours used on SL maps. */
 const COL = {
@@ -275,6 +284,7 @@ const T = {
     followNeedsGeo: 'Tryck på Använd min position och tillåt platsåtkomst för att slå på.',
     followNoGeo: 'Webbläsaren kan inte hämta din position.',
     radius: 'Radie', stopsIn: '{n} hållplatser inom radien', stopsCapped: '{n} hållplatser inom radien. Högst {max} med avgångar visas: stationer och bryggor först, sedan de närmaste busshållplatserna.',
+    dirsTitle: 'Riktningar', dirsHint: 'Avmarkera en riktning för att dölja den. Listan visar linjerna i närheten just nu.', dirN: 'riktning {n}',
     modes: 'Trafikslag', language: 'Språk', display: 'Visning',
     window: 'Visa avgångar inom',
     walkOpt: 'Dölj avgångar som man inte hinner gå till', walkHint: 'Gångtiden räknas från avståndet till hållplatsen.',
@@ -308,6 +318,7 @@ const T = {
     followNeedsGeo: 'Tap Use my location and allow location access to turn this on.',
     followNoGeo: 'This browser cannot get your location.',
     radius: 'Radius', stopsIn: '{n} stops within the radius', stopsCapped: '{n} stops within the radius. At most {max} with departures are shown: stations and piers first, then the nearest bus stops.',
+    dirsTitle: 'Directions', dirsHint: 'Untick a direction to hide it. The list shows the lines nearby right now.', dirN: 'direction {n}',
     modes: 'Transport types', language: 'Language', display: 'Display',
     window: 'Show departures within',
     walkOpt: 'Hide departures you cannot walk to in time', walkHint: 'Walking time is estimated from the distance to the stop.',
@@ -359,6 +370,8 @@ function sanitize(s) {
   o.name = String(o.name || coordName(o.lat, o.lon)).slice(0, 80);
   o.r = clamp(Math.round(+o.r) || DEFAULTS.r, 50, 5000);
   o.hide = (Array.isArray(o.hide) ? o.hide : []).filter(m => MODES.includes(m));
+  // Hidden directions as 'line:direction code', for example '76:1'.
+  o.hidedir = [...new Set((Array.isArray(o.hidedir) ? o.hidedir : []).map(String).filter(k => /^[0-9A-Za-zÅÄÖåäö]{1,6}:[12]$/.test(k)))].slice(0, 200);
   o.lang = o.lang === 'en' ? 'en' : 'sv';
   o.win = clamp(Math.round(+o.win) || DEFAULTS.win, 10, 240);
   o.size = ['a', 's', 'm', 'l', 'x'].includes(o.size) ? o.size : 'a';
@@ -370,13 +383,14 @@ function loadStored() {
 }
 function readHash() {
   const p = new URLSearchParams(location.hash.replace(/^#!?/, ''));
-  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx', 'plat', 'split'];
+  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx', 'plat', 'split', 'hidedir'];
   if (!keys.some(k => p.has(k))) return null;
   const o = {};
   if (p.has('lat') && p.has('lon')) { o.lat = +p.get('lat'); o.lon = +p.get('lon'); o.name = p.get('name') || coordName(o.lat, o.lon); }
   else if (p.has('addr')) o.addr = p.get('addr');
   for (const k of ['r', 'win']) if (p.has(k)) o[k] = +p.get(k);
   if (p.has('hide')) o.hide = p.get('hide').split(',').map(s => s.trim());
+  if (p.has('hidedir')) o.hidedir = p.get('hidedir').split(',').map(s => s.trim()).filter(Boolean);
   if (p.has('show')) { const show = p.get('show').split(',').map(s => s.trim()); o.hide = MODES.filter(m => !show.includes(m)); }
   if (p.has('lang')) o.lang = p.get('lang');
   if (p.has('size')) o.size = p.get('size');
@@ -388,6 +402,7 @@ function hashFor(c) {
   p.set('lat', c.lat.toFixed(5)); p.set('lon', c.lon.toFixed(5)); p.set('name', c.name);
   if (c.r !== DEFAULTS.r) p.set('r', c.r);
   if (c.hide.length) p.set('hide', c.hide.join(','));
+  if (c.hidedir.length) p.set('hidedir', c.hidedir.join(','));
   if (c.lang !== DEFAULTS.lang) p.set('lang', c.lang);
   if (c.win !== DEFAULTS.win) p.set('win', c.win);
   if (!c.walk) p.set('walk', 0);
@@ -398,7 +413,7 @@ function hashFor(c) {
   if (c.cx) p.set('cx', 1);
   if (!c.plat) p.set('plat', 0);
   if (!c.split) p.set('split', 0);
-  return '#' + p.toString().replace(/%2C/g, ',');
+  return '#' + p.toString().replace(/%2C/g, ',').replace(/%3A/g, ':');
 }
 function initialConfig() {
   const stored = loadStored(), hash = readHash();
@@ -570,6 +585,7 @@ async function refresh() {
   if (!lastFailed) lastOk = Date.now();
   loaded = true;
   render();
+  if (!$('panel').hidden) syncDirs();   // new lines nearby appear in the open settings panel
   // Places were freed and more stops are waiting: fetch those soon instead of after a full interval.
   const waiting = freed && list.some((s, i) => results[i] === undefined && !((pollAfter.get(s.id) || 0) > Date.now()));
   if (!waiting) warm = true;
@@ -578,11 +594,12 @@ async function refresh() {
 
 /* ---------- Board ---------- */
 function buildSections(now) {
-  const seen = new Set(), groups = new Map();
+  const seen = new Set(), groups = new Map(), hiddenDir = new Set(cfg.hidedir);
   const byDistance = [...near].sort((a, b) => a.dist - b.dist);   // a departure listed by two stops counts for the nearer
   for (const site of byDistance) for (const d of depsBySite.get(site.id) || []) {
     if (cfg.hide.includes(d.mode) || seen.has(d.id)) continue;
     seen.add(d.id);
+    if (hiddenDir.has(d.line + ':' + d.dirCode)) continue;   // a direction turned off in the settings
     if (d.cancelled && !cfg.cx) continue;   // SL often lists a cancelled trip next to its replacement
     const mins = (d.when - now) / 60000;
     if (mins < -0.5 || mins > cfg.win) continue;
@@ -822,7 +839,7 @@ function render() {
     // Largest size at which every row fits. A slightly smaller size is preferred if it keeps sections whole.
     const flow = AUTO_STEPS.find(f => fits(f, false)) || AUTO_STEPS[AUTO_STEPS.length - 1];
     const best = AUTO_STEPS.find(f => f <= flow && f >= flow - 0.11 && fits(f, true)) || flow;
-    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split].join('|');
+    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split, cfg.hidedir.join()].join('|');
     // Shrink at once when rows no longer fit; grow only after the larger size has fitted for a while,
     // so the text size, and with it the columns, do not change every time a departure comes or goes.
     if (!auto.scale || key !== auto.key || best < auto.scale || !sections.length) auto = { scale: best, key, since: 0 };
@@ -842,7 +859,7 @@ function render() {
   if (!loaded) html = '<div class="empty">' + t('loading') + '</div>';
   else if (sections.length) {
     const cols = narrow ? layout(sections, C, R, false)
-      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split].join('|'));
+      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split, cfg.hidedir.join()].join('|'));
     // Stretch the rows so the longest column fills the board height (type size stays the same).
     if (!narrow) slot = clamp(boardH / Math.max(1, ...cols.map(c => c.length)), rowH, rowH * 1.45);
     board.style.gridTemplateColumns = 'repeat(' + Math.min(C, Math.max(cols.length, narrow ? 1 : Math.min(C, 2))) + ', minmax(0, 1fr))';
@@ -892,9 +909,43 @@ function syncPanel() {
   $('fLed').checked = cfg.led; $('fMsg').checked = cfg.msg; $('fGroup').checked = cfg.group; $('fCx').checked = cfg.cx; $('fPlat').checked = cfg.plat; $('fSplit').checked = cfg.split;
   document.querySelectorAll('input[name=lang]').forEach(el => { el.checked = el.value === cfg.lang; });
   $('fModes').querySelectorAll('input').forEach(el => { el.checked = !cfg.hide.includes(el.value); });
+  syncDirs();
   $('placeNow').textContent = cfg.name + ' (' + coordName(cfg.lat, cfg.lon) + ')';
   syncFollow();
   syncPanelHints();
+}
+/* Directions by line: every line nearby with the destinations it has in each direction, plus any direction
+   already turned off that is not in the current data. */
+let lastDirsHtml = '';
+function syncDirs() {
+  const lines = new Map();
+  const entry = (mode, line, group) => {
+    const k = MODES.indexOf(mode) + '|' + line;
+    if (!lines.has(k)) lines.set(k, { mode, line, group, dirs: new Map() });
+    return lines.get(k);
+  };
+  for (const site of near) for (const d of depsBySite.get(site.id) || []) {
+    if (cfg.hide.includes(d.mode) || !(d.dirCode === 1 || d.dirCode === 2)) continue;
+    const e = entry(d.mode, d.line, d.group);
+    if (!e.dirs.has(d.dirCode)) e.dirs.set(d.dirCode, new Set());
+    if (d.dest) e.dirs.get(d.dirCode).add(d.dest);   // where the trips go, not SL's direction name for the line
+  }
+  const known = new Set([...lines.values()].map(e => e.line));
+  for (const k of cfg.hidedir) {
+    const [line, code] = k.split(':');
+    const e = [...lines.values()].find(x => x.line === line) || (known.has(line) ? null : entry('', line, ''));
+    if (e && !e.dirs.has(+code)) e.dirs.set(+code, new Set());
+  }
+  const list = [...lines.entries()].sort((a, b) => a[0].localeCompare(b[0], 'sv', { numeric: true })).map(x => x[1]);
+  const html = list.map(e => '<div class="ld"><span class="badge" style="--c:' + (e.mode ? lineColor(e) : '#555') + '">' +
+    (e.mode ? ICON[e.mode] : '') + '<b>' + esc(e.line) + '</b></span><div class="ldo">' +
+    [...e.dirs.keys()].sort().map(code => {
+      const names = [...e.dirs.get(code)].sort((a, b) => a.localeCompare(b, 'sv'));
+      return '<label class="opt"><input type="checkbox" data-k="' + esc(e.line + ':' + code) + '"> ' +
+        esc(names.length ? t('towards') + ' ' + names.join(', ') : t('dirN', { n: code })) + '</label>';
+    }).join('') + '</div></div>').join('');
+  if (html !== lastDirsHtml) { $('fDirs').innerHTML = html; lastDirsHtml = html; }
+  $('fDirs').querySelectorAll('input').forEach(el => { el.checked = !cfg.hidedir.includes(el.dataset.k); });
 }
 function syncPanelHints() {
   if (!sites) { $('rHint').textContent = ''; return; }
@@ -1006,6 +1057,9 @@ function followNow(force) {
 function buildPanel() {
   $('fModes').innerHTML = MODES.map(m =>
     '<label class="opt"><input type="checkbox" value="' + m + '">' + ICON[m] + '<span data-m="' + m + '"></span></label>').join('');
+  $('fDirs').addEventListener('change', () => {
+    update({ hidedir: [...$('fDirs').querySelectorAll('input')].filter(el => !el.checked).map(el => el.dataset.k) });
+  });
   $('fModes').addEventListener('change', () => {
     update({ hide: [...$('fModes').querySelectorAll('input')].filter(el => !el.checked).map(el => el.value) });
   });

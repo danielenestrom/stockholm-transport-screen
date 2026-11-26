@@ -44,6 +44,7 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 | `r` | Radius in metres | 500 |
 | `hide` | Transport types to hide: `metro`, `train`, `tram`, `bus`, `boat` | none |
 | `show` | Alternative to `hide`: the only types to show | all |
+| `hidedir` | Directions to hide, as line and SL direction code `1` or `2`, for example `76:1,17:2` | none |
 | `lang` | `sv` or `en` | `sv` |
 | `win` | Show departures within this many minutes | 60 |
 | `walk` | `0` also shows departures that leave before you can walk to the stop | on |
@@ -75,6 +76,7 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 
 - Departures are grouped by stop, nearest first. Each stop's header shows its name, the transport types it serves and the walking time, so the rows only show line, destination, platform or stand, and times. Within a stop, departures are listed by transport type and then by time. Stops that SL lists separately under the same name, such as a metro station and a bus stop, share one block.
 - Metro and commuter trains get one block per direction, with the direction under the stop name, for example "mot Hässelby strand". The direction is SL's end station for each line in that direction, so a block can list several. Each metro line colour (green, red, blue) is split on its own, and the stop's other departures follow in one block. Turn this off with "Dela upp tunnelbana och pendeltåg per riktning" (`split=0`).
+- Under "Riktningar" in the settings panel, each line nearby is listed with the destinations it has in each direction. Unticking a direction hides it from the board and adds it to `hidedir` in the link. Direction codes mean different things on different lines, so use the panel rather than guessing them. A hidden direction stays in the list, so it can be turned back on, even when the line has no departures at the moment.
 - With "Gruppera avgångar per hållplats" turned off (`group=0`), departures are grouped by transport type instead, and each row shows its stop and walking time.
 - Automatic text size picks the largest size at which every row fits, and never goes below a size readable from a distance. If rows still do not fit, those from the farthest stops are dropped first. The text shrinks at once when rows no longer fit, but only grows after the larger size has fitted for three minutes.
 - A section is only split across two columns when there is no arrangement that keeps every section whole, even if that makes the columns taller.
