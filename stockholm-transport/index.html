@@ -431,6 +431,7 @@ let near = [], nearTotal = 0;     // stops within the radius
 let depsBySite = new Map();       // site id -> departures
 let msgsBySite = new Map();       // site id -> disruption messages: { text, lines: SL line ids it applies to }
 let pollAfter = new Map();       // site id -> earliest time for the next request
+let emptyAnswers = new Map();    // site id -> empty answers in a row
 let lastOk = 0, lastFailed = false, loaded = false, refreshSeq = 0, lastHtml = '';
 let warm = false;                 // every stop in range has been asked once since the place or settings changed
 let auto = { scale: 0, key: '', since: 0 };   // automatic text size
@@ -451,7 +452,7 @@ function update(patch, opts) {
   applyStatic();
   const refetch = before.lat !== cfg.lat || before.lon !== cfg.lon || before.r !== cfg.r || before.win !== cfg.win ||
     before.hide.join() !== cfg.hide.join();
-  if (refetch) { pollAfter.clear(); warm = false; clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 400); }
+  if (refetch) { pollAfter.clear(); emptyAnswers.clear(); warm = false; clearTimeout(refreshTimer); refreshTimer = setTimeout(refresh, 400); }
   render();
 }
 
@@ -567,6 +568,14 @@ async function refresh() {
     ok++;
     const site = list[i];
     const deps = (r.departures || []).map(d => normalize(d, site)).filter(Boolean);
+    // SL now and then answers with an empty list for a stop that has departures, and the next answer is
+    // complete again. An empty answer is only believed when it comes twice in a row; the first one is
+    // handled like a failed request, so the stop keeps its previous times and is asked again next time.
+    if (!deps.length) {
+      const n = (emptyAnswers.get(site.id) || 0) + 1;
+      emptyAnswers.set(site.id, n);
+      if (n < 2) { results[i] = null; return; }
+    } else emptyAnswers.delete(site.id);
     depsBySite.set(site.id, deps);
     msgsBySite.set(site.id, (r.stop_deviations || []).filter(m => m && m.message)
       .map(m => ({ text: m.message, lines: ((m.scope && m.scope.lines) || []).map(l => l.id) })));

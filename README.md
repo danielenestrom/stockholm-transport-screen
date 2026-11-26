@@ -26,7 +26,7 @@ The page is based on information retrieved from [Trafiklab.se](https://www.trafi
 - SL Transport API, `https://transport.integration.sl.se/v1`: `/sites` and `/stop-points` for the stop list (cached in the browser for 24 hours), `/sites/{id}/departures` for departures.
 - SL journey planner, `https://journeyplanner.integration.sl.se/v2/stop-finder`: address and stop search in the settings panel.
 
-SL returns HTTP 429 when requests arrive too fast. The page asks for at most 12 stops per refresh, two at a time, retries a 429 twice and keeps the previous times for a stop that fails. The refresh interval is 30 to 60 seconds depending on the number of stops; the countdown is recalculated every second in between.
+SL sometimes answers with an empty departure list for a stop that does have departures. The page only believes an empty answer when it comes twice in a row, and keeps the previous times until then. SL returns HTTP 429 when requests arrive too fast. The page asks for at most 12 stops per refresh, two at a time, retries a 429 twice and keeps the previous times for a stop that fails. The refresh interval is 30 to 60 seconds depending on the number of stops; the countdown is recalculated every second in between.
 
 ## Link parameters
 
