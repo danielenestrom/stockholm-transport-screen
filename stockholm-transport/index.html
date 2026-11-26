@@ -72,9 +72,16 @@ body.idle { cursor: none; }
 .badge svg { width: .95em; height: .95em; flex: none; }
 .mid { flex: 1 1 auto; min-width: 0; }
 .dest { font-family: var(--sign); font-weight: 800; font-size: calc(var(--row-h) * .45); line-height: 1.1;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  white-space: nowrap; overflow: hidden; }
+.dest > span { display: inline-block; }
+/* Set by fitDests: a smaller size only when the name does not fit, and as a last resort a slow scroll. */
 .dest.long { font-size: calc(var(--row-h) * .38); }
 .dest.xlong { font-size: calc(var(--row-h) * .32); }
+.dest.marq { -webkit-mask-image: linear-gradient(90deg, transparent, #000 .3em, #000 calc(100% - .3em), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 .3em, #000 calc(100% - .3em), transparent); }
+.dest.marq > span { animation: marq var(--dur) ease-in-out var(--delay) infinite alternate; }
+@keyframes marq { 0%, 20% { transform: none; } 80%, 100% { transform: translateX(calc(-1 * var(--shift))); } }
+@media (prefers-reduced-motion: reduce) { .dest.marq > span { animation: none; } }
 .from { color: #a8a8a8; font-size: calc(var(--row-h) * .285); line-height: 1.2;
   display: flex; gap: .5em; white-space: nowrap; }
 .from .fs { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -148,7 +155,8 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 @media (max-width: 699px) {
   #hd, #board, #ft { padding-left: calc(var(--u) * .25); padding-right: calc(var(--u) * .25); }
   .ttl { flex-direction: column; align-items: flex-start; gap: 0; font-size: calc(var(--u) * .42); }
-  .dest.long, .dest.xlong { font-size: calc(var(--row-h) * .32); }
+  .dest.long { font-size: calc(var(--row-h) * .29); }
+  .dest.xlong { font-size: calc(var(--row-h) * .26); }
   .badge { min-width: calc(var(--row-h) * 1.1); font-size: calc(var(--row-h) * .3); }
   .dest, .t1 { font-size: calc(var(--row-h) * .32); }
   .t2 { font-size: calc(var(--row-h) * .22); }
@@ -440,6 +448,37 @@ let msgsBySite = new Map();       // site id -> disruption messages: { text, lin
 let pollAfter = new Map();       // site id -> earliest time for the next request
 let emptyAnswers = new Map();    // site id -> empty answers in a row
 let lastOk = 0, lastFailed = false, loaded = false, refreshSeq = 0, lastHtml = '';
+let lastFitKey = '', fontsDone = 0;   // destinations are measured again when the size or the fonts change
+const MARQ_PX_PER_S = 40;             // scroll speed for names that do not fit even at the smallest size
+
+/* Each destination keeps the largest size at which it fits its column. A name that does not fit even
+   at the smallest size scrolls slowly to its end and back. The phase follows the clock, so redrawing
+   the board, which happens whenever a time changes, does not restart the scroll. */
+function fitDests(board) {
+  for (const el of board.querySelectorAll('.dest')) {
+    const span = el.firstElementChild;
+    el.classList.remove('long', 'xlong', 'marq');
+    span.style.letterSpacing = '';
+    if (span.offsetWidth <= el.clientWidth) continue;
+    el.classList.add('long');
+    if (span.offsetWidth <= el.clientWidth) continue;
+    el.classList.replace('long', 'xlong');
+    const over = span.offsetWidth - el.clientWidth;
+    if (over <= 0) continue;
+    // Only a few pixels too wide: tighten the letters a little instead of scrolling.
+    const chars = span.textContent.length, size = parseFloat(getComputedStyle(el).fontSize);
+    if (chars > 1 && (over + 1) / (chars - 1) <= size * .06) {
+      span.style.letterSpacing = -((over + 1) / (chars - 1)).toFixed(2) + 'px';
+      if (span.offsetWidth <= el.clientWidth) continue;
+      span.style.letterSpacing = '';
+    }
+    const dur = Math.max(6, over / MARQ_PX_PER_S / .6);   // 60 % of each pass is moving, the rest pausing
+    el.style.setProperty('--shift', over + 'px');
+    el.style.setProperty('--dur', dur.toFixed(1) + 's');
+    el.style.setProperty('--delay', -(Date.now() / 1000 % (dur * 2)).toFixed(2) + 's');
+    el.classList.add('marq');
+  }
+}
 let warm = false;                 // every stop in range has been asked once since the place or settings changed
 let auto = { scale: 0, key: '', since: 0 };   // automatic text size
 const AUTO_GROW_MS = 3 * 60000;               // a larger size must have fitted this long before it is used
@@ -831,7 +870,7 @@ function rowHtml(g, now) {
   const later = g.live.slice(1, 3);
   const t2 = later.map(d => fmtTime(d.when, now, true)).join(' · ');
   return '<div class="row"><span class="badge" style="--c:' + lineColor(g) + '">' + ICON[g.mode] + '<b>' + esc(g.line) + '</b></span>' +
-    '<div class="mid"><div class="dest' + (g.dest.length > 19 ? ' xlong' : g.dest.length > 16 ? ' long' : '') + '">' + esc(g.dest) + '</div><div class="from">' + from + '</div></div>' +
+    '<div class="mid"><div class="dest"><span>' + esc(g.dest) + '</span></div><div class="from">' + from + '</div></div>' +
     '<div class="times">' + t1 + '<div class="t2">' + t2 + '</div></div></div>';
 }
 
@@ -891,7 +930,11 @@ function render() {
     html = '<div class="empty">' + text + '</div>';
   }
   root.setProperty('--slot', slot + 'px');
-  if (html !== lastHtml) { board.innerHTML = html; lastHtml = html; }
+  const fitKey = [W, H, rowH, slot, fontsDone].join('|');
+  if (html !== lastHtml || fitKey !== lastFitKey) {
+    if (html !== lastHtml) { board.innerHTML = html; lastHtml = html; }
+    fitDests(board); lastFitKey = fitKey;
+  }
 
   // Footer: disruption messages rotate, status on the right.
   // Only messages about a line on the board, or about the stop as a whole (no lines listed).
@@ -1169,6 +1212,8 @@ async function start() {
   ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(ev => addEventListener(ev, wake, { passive: true }));
   wake();
   keepAwake();
+  // Names are measured in the sign typeface, so measure again once a font has loaded.
+  if (document.fonts) { document.fonts.addEventListener('loadingdone', () => { fontsDone++; render(); }); document.fonts.ready.then(() => { fontsDone++; render(); }); }
   document.addEventListener('visibilitychange', () => { keepAwake(); if (document.visibilityState === 'visible') { refresh(); followNow(); } });
   addEventListener('pageshow', e => { if (e.persisted) { refresh(); followNow(); } });   // restored from the back/forward cache
   addEventListener('focus', () => followNow());   // a laptop window that stayed visible behind another one
