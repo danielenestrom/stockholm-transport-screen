@@ -53,6 +53,7 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 | `group` | `0` groups departures by transport type instead of by stop | on |
 | `cx` | `1` also shows cancelled departures | off |
 | `plat` | `0` hides platform, stand and berth | on |
+| `split` | `0` keeps both directions of metro and commuter trains in one block | on |
 
 Keyboard: `S` opens settings, `F` toggles full screen.
 
@@ -73,6 +74,7 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 ## Layout rules
 
 - Departures are grouped by stop, nearest first. Each stop's header shows its name, the transport types it serves and the walking time, so the rows only show line, destination, platform or stand, and times. Within a stop, departures are listed by transport type and then by time. Stops that SL lists separately under the same name, such as a metro station and a bus stop, share one block.
+- Metro and commuter trains get one block per direction, with the direction under the stop name, for example "mot Hässelby strand". The direction is SL's end station for each line in that direction, so a block can list several. Each metro line colour (green, red, blue) is split on its own, and the stop's other departures follow in one block. Turn this off with "Dela upp tunnelbana och pendeltåg per riktning" (`split=0`).
 - With "Gruppera avgångar per hållplats" turned off (`group=0`), departures are grouped by transport type instead, and each row shows its stop and walking time.
 - Automatic text size picks the largest size at which every row fits, and never goes below a size readable from a distance. If rows still do not fit, those from the farthest stops are dropped first. The text shrinks at once when rows no longer fit, but only grows after the larger size has fitted for three minutes.
 - A section is only split across two columns when there is no arrangement that keeps every section whole, even if that makes the columns taller.

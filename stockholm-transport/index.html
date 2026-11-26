@@ -49,6 +49,10 @@ body.idle { cursor: none; }
   font-size: calc(var(--row-h) * .34); border-bottom: 2px solid #4a4a4a; padding-top: calc(var(--row-h) * .2); }
 .sec svg { width: calc(var(--row-h) * .5); height: calc(var(--row-h) * .5); flex: none; --ic-cut: var(--bg); }
 .sec .sn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A direction section shows its direction on a second line under the name. */
+.sec .st { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.sec .sd { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--grey);
+  font-weight: 400; text-transform: none; letter-spacing: 0; font-size: .85em; }
 .sec .sw { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: .15em; color: var(--grey);
   font-weight: 400; text-transform: none; letter-spacing: 0; font-size: .85em; }
 .sec .sw svg { width: .9em; height: .9em; }
@@ -189,6 +193,8 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
   <div class="hint" data-t="walkHint" style="margin:0 0 6px 27px"></div>
   <label class="opt"><input type="checkbox" id="fGroup"> <span data-t="groupOpt"></span></label>
   <div class="hint" data-t="groupHint" style="margin:0 0 6px 27px"></div>
+  <label class="opt"><input type="checkbox" id="fSplit"> <span data-t="splitOpt"></span></label>
+  <div class="hint" data-t="splitHint" style="margin:0 0 6px 27px"></div>
   <label class="opt"><input type="checkbox" id="fPlat"> <span data-t="platOpt"></span></label>
   <label class="opt"><input type="checkbox" id="fCx"> <span data-t="cxOpt"></span></label>
   <div class="hint" data-t="cxHint" style="margin:0 0 6px 27px"></div>
@@ -211,6 +217,7 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 const API = 'https://transport.integration.sl.se/v1';
 const GEO = 'https://journeyplanner.integration.sl.se/v2/stop-finder';
 const MODES = ['metro', 'train', 'tram', 'bus', 'boat'];
+const SPLIT_MODES = ['metro', 'train'];   // split by direction when that setting is on
 const BIT = { metro: 1, train: 2, tram: 4, bus: 8, boat: 16 };
 const AREA_BITS = { METROSTN: 1, RAILWSTN: 2 | 4, TRAMSTN: 4, BUSTERM: 8, SHIPBER: 16, FERRYBER: 16 };
 const API_MODE = { METRO: 'metro', TRAIN: 'train', TRAM: 'tram', BUS: 'bus', SHIP: 'boat', FERRY: 'boat' };
@@ -220,7 +227,7 @@ const REFRESH_MS = 30000;   // shortest refresh interval; grows with the number 
 const IDLE_POLL_MS = 5 * 60000;   // stops with nothing to show are asked less often
 const SITES_TTL = 24 * 3600 * 1000;
 const DEFAULTS = { lat: 59.3312, lon: 18.0592, name: 'T-Centralen', r: 500, hide: [], lang: 'sv',
-                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false, plat: true };
+                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false, plat: true, split: true };
 
 /* Line colours. Metro and commuter train follow the colours used on SL maps. */
 const COL = {
@@ -252,7 +259,7 @@ const T = {
   sv: {
     title: 'Avgångar', near: 'nära', docTitle: 'Avgångar – Stockholm',
     metro: 'Tunnelbana', train: 'Pendeltåg', tram: 'Spårväg och lokalbana', bus: 'Buss', boat: 'Båt',
-    cont: 'forts.', now: 'Nu', min: 'min', cancelled: 'Inställd',
+    towards: 'mot', cont: 'forts.', now: 'Nu', min: 'min', cancelled: 'Inställd',
     track: 'Spår', stand: 'Läge', berth: 'Kaj', walk: 'Gångtid',
     loading: 'Hämtar avgångar …',
     noStops: 'Inga hållplatser inom {r} m. Öka radien i inställningarna.',
@@ -274,6 +281,7 @@ const T = {
     textSize: 'Textstorlek', sizeA: 'Automatisk', sizeS: 'Liten', sizeM: 'Normal', sizeL: 'Stor', sizeX: 'Extra stor',
     led: 'Skylttypsnitt (punktmatris)', showMsg: 'Visa störningsinformation',
     groupOpt: 'Gruppera avgångar per hållplats', groupHint: 'Varje hållplats får ett eget block, närmast först.',
+    splitOpt: 'Dela upp tunnelbana och pendeltåg per riktning', splitHint: 'Varje riktning får ett eget block.',
     platOpt: 'Visa spår, läge och kaj',
     cxOpt: 'Visa inställda avgångar', cxHint: 'Annars visas bara avgångar som går.',
     copyLink: 'Kopiera länk', copied: 'Länken är kopierad', done: 'Klar',
@@ -284,7 +292,7 @@ const T = {
   en: {
     title: 'Departures', near: 'near', docTitle: 'Departures – Stockholm',
     metro: 'Metro', train: 'Commuter train', tram: 'Tram and light rail', bus: 'Bus', boat: 'Boat',
-    cont: 'cont.', now: 'Now', min: 'min', cancelled: 'Cancelled',
+    towards: 'towards', cont: 'cont.', now: 'Now', min: 'min', cancelled: 'Cancelled',
     track: 'Platform', stand: 'Stand', berth: 'Berth', walk: 'Walking time',
     loading: 'Loading departures …',
     noStops: 'No stops within {r} m. Increase the radius in settings.',
@@ -306,6 +314,7 @@ const T = {
     textSize: 'Text size', sizeA: 'Automatic', sizeS: 'Small', sizeM: 'Normal', sizeL: 'Large', sizeX: 'Extra large',
     led: 'Sign typeface (dot matrix)', showMsg: 'Show disruption messages',
     groupOpt: 'Group departures by stop', groupHint: 'Each stop gets its own block, nearest first.',
+    splitOpt: 'Split metro and commuter trains by direction', splitHint: 'Each direction gets its own block.',
     platOpt: 'Show platforms, stands and berths',
     cxOpt: 'Show cancelled departures', cxHint: 'Otherwise only departures that run are shown.',
     copyLink: 'Copy link', copied: 'Link copied', done: 'Done',
@@ -353,7 +362,7 @@ function sanitize(s) {
   o.lang = o.lang === 'en' ? 'en' : 'sv';
   o.win = clamp(Math.round(+o.win) || DEFAULTS.win, 10, 240);
   o.size = ['a', 's', 'm', 'l', 'x'].includes(o.size) ? o.size : 'a';
-  o.walk = !!o.walk; o.led = !!o.led; o.msg = !!o.msg; o.group = !!o.group; o.cx = !!o.cx; o.plat = !!o.plat;
+  o.walk = !!o.walk; o.led = !!o.led; o.msg = !!o.msg; o.group = !!o.group; o.cx = !!o.cx; o.plat = !!o.plat; o.split = !!o.split;
   return o;
 }
 function loadStored() {
@@ -361,7 +370,7 @@ function loadStored() {
 }
 function readHash() {
   const p = new URLSearchParams(location.hash.replace(/^#!?/, ''));
-  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx', 'plat'];
+  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx', 'plat', 'split'];
   if (!keys.some(k => p.has(k))) return null;
   const o = {};
   if (p.has('lat') && p.has('lon')) { o.lat = +p.get('lat'); o.lon = +p.get('lon'); o.name = p.get('name') || coordName(o.lat, o.lon); }
@@ -371,7 +380,7 @@ function readHash() {
   if (p.has('show')) { const show = p.get('show').split(',').map(s => s.trim()); o.hide = MODES.filter(m => !show.includes(m)); }
   if (p.has('lang')) o.lang = p.get('lang');
   if (p.has('size')) o.size = p.get('size');
-  for (const k of ['walk', 'led', 'msg', 'group', 'cx', 'plat']) if (p.has(k)) o[k] = !/^(0|false|no|off)$/i.test(p.get(k));
+  for (const k of ['walk', 'led', 'msg', 'group', 'cx', 'plat', 'split']) if (p.has(k)) o[k] = !/^(0|false|no|off)$/i.test(p.get(k));
   return o;
 }
 function hashFor(c) {
@@ -388,6 +397,7 @@ function hashFor(c) {
   if (!c.group) p.set('group', 0);
   if (c.cx) p.set('cx', 1);
   if (!c.plat) p.set('plat', 0);
+  if (!c.split) p.set('split', 0);
   return '#' + p.toString().replace(/%2C/g, ',');
 }
 function initialConfig() {
@@ -517,6 +527,7 @@ function normalize(d, site) {
     dest: d.destination || '', stop: (d.stop_area && d.stop_area.name) || site.name,
     sp: (d.stop_point && d.stop_point.designation) || '', when,
     cancelled: d.state === 'CANCELLED' || (d.deviations || []).some(x => x.consequence === 'CANCELLED'),
+    dirCode: d.direction_code, dirName: d.direction || '',
     dist: site.dist, place: site.name
   };
 }
@@ -595,20 +606,35 @@ function buildSections(now) {
     g.sort = (g.live[0] || g.deps[0]).when;
   }
   rows.sort((a, b) => a.sort - b.sort || a.line.localeCompare(b.line, 'sv', { numeric: true }));
+  // With the direction split, metro and commuter trains get one section per line group and direction.
+  // SL's direction code means the same for every line in a group, such as the green metro line.
+  const dirOf = r => cfg.split && SPLIT_MODES.includes(r.mode) && r.dirCode ? [MODES.indexOf(r.mode), r.group, r.dirCode].join('|') : '';
+  const add = (map, key, r, init) => {
+    let s = map.get(key);
+    if (!s) map.set(key, s = { key, modes: new Set(), dirs: new Set(), rows: [], ...init });
+    s.modes.add(r.mode); s.rows.push(r);
+    if (s.dir && r.dirName) s.dirs.add(r.dirName);
+    return s;
+  };
   let list;
   if (cfg.group) {
     // One section per stop, nearest first, so the board shows where to walk to. Stops are matched by
     // name, so a metro station and a bus stop that SL lists separately under one name share a section.
-    const byPlace = new Map();
+    const byKey = new Map(), placeDist = new Map();
     for (const r of rows) {
-      let s = byPlace.get(r.place);
-      if (!s) byPlace.set(r.place, s = { key: 'p:' + r.place, place: r.place, dist: r.dist, modes: new Set(), rows: [] });
-      s.modes.add(r.mode); s.dist = Math.min(s.dist, r.dist); s.rows.push(r);
+      const dir = dirOf(r);
+      const s = add(byKey, 'p:' + r.place + (dir ? '|' + dir : ''), r, { place: r.place, dist: r.dist, dir });
+      s.dist = Math.min(s.dist, r.dist);
+      placeDist.set(r.place, Math.min(placeDist.has(r.place) ? placeDist.get(r.place) : Infinity, r.dist));
     }
-    list = [...byPlace.values()].sort((a, b) => a.dist - b.dist || a.place.localeCompare(b.place, 'sv'));
+    // A stop's direction sections come first, then one section with everything else it serves.
+    list = [...byKey.values()].sort((a, b) => placeDist.get(a.place) - placeDist.get(b.place) ||
+      a.place.localeCompare(b.place, 'sv') || !a.dir - !b.dir || a.dir.localeCompare(b.dir, 'sv', { numeric: true }));
     for (const s of list) s.rows.sort((a, b) => MODES.indexOf(a.mode) - MODES.indexOf(b.mode) || a.sort - b.sort);
   } else {
-    list = MODES.map(mode => ({ key: mode, mode, modes: new Set([mode]), rows: rows.filter(r => r.mode === mode) })).filter(s => s.rows.length);
+    const byKey = new Map();
+    for (const r of rows) { const dir = dirOf(r); add(byKey, r.mode + (dir ? '|' + dir : ''), r, { mode: r.mode, dir }); }
+    list = [...byKey.values()].sort((a, b) => MODES.indexOf(a.mode) - MODES.indexOf(b.mode) || a.dir.localeCompare(b.dir, 'sv', { numeric: true }));
   }
   list.forEach((s, i) => { s.rank = i; });
   sectionsByKey = new Map(list.map(s => [s.key, s]));
@@ -752,10 +778,12 @@ function secHtml(it) {
   const s = sectionsByKey.get(it.head);
   if (!s) return '';
   const cont = it.cont ? '<small>' + t('cont') + '</small>' : '';
-  if (!s.place) return '<div class="sec">' + ICON[s.mode] + '<span class="sn">' + t(s.mode) + '</span>' + cont + '</div>';
+  const dir = s.dirs.size ? '<span class="sd">' + t('towards') + ' ' + esc([...s.dirs].sort((a, b) => a.localeCompare(b, 'sv')).join(', ')) + '</span>' : '';
+  const name = n => dir ? '<span class="st"><span class="sn">' + n + '</span>' + dir + '</span>' : '<span class="sn">' + n + '</span>';
+  if (!s.place) return '<div class="sec">' + ICON[s.mode] + name(t(s.mode)) + cont + '</div>';
   // The stop name may be cut short in a narrow column; "cont." and the walking time stay visible.
   return '<div class="sec">' + MODES.filter(m => s.modes.has(m)).map(m => ICON[m]).join('') +
-    '<span class="sn">' + esc(s.place) + '</span>' + cont +
+    name(esc(s.place)) + cont +
     '<span class="sw" title="' + t('walk') + '">' + WALK_ICON + walkMin(s.dist) + ' min</span></div>';
 }
 function rowHtml(g, now) {
@@ -794,7 +822,7 @@ function render() {
     // Largest size at which every row fits. A slightly smaller size is preferred if it keeps sections whole.
     const flow = AUTO_STEPS.find(f => fits(f, false)) || AUTO_STEPS[AUTO_STEPS.length - 1];
     const best = AUTO_STEPS.find(f => f <= flow && f >= flow - 0.11 && fits(f, true)) || flow;
-    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat].join('|');
+    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split].join('|');
     // Shrink at once when rows no longer fit; grow only after the larger size has fitted for a while,
     // so the text size, and with it the columns, do not change every time a departure comes or goes.
     if (!auto.scale || key !== auto.key || best < auto.scale || !sections.length) auto = { scale: best, key, since: 0 };
@@ -814,7 +842,7 @@ function render() {
   if (!loaded) html = '<div class="empty">' + t('loading') + '</div>';
   else if (sections.length) {
     const cols = narrow ? layout(sections, C, R, false)
-      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat].join('|'));
+      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split].join('|'));
     // Stretch the rows so the longest column fills the board height (type size stays the same).
     if (!narrow) slot = clamp(boardH / Math.max(1, ...cols.map(c => c.length)), rowH, rowH * 1.45);
     board.style.gridTemplateColumns = 'repeat(' + Math.min(C, Math.max(cols.length, narrow ? 1 : Math.min(C, 2))) + ', minmax(0, 1fr))';
@@ -861,7 +889,7 @@ function applyStatic() {
 function syncPanel() {
   $('fR').value = cfg.r; $('rVal').textContent = cfg.r + ' m';
   $('fWin').value = String(cfg.win); $('fWalk').checked = cfg.walk; $('fSize').value = cfg.size;
-  $('fLed').checked = cfg.led; $('fMsg').checked = cfg.msg; $('fGroup').checked = cfg.group; $('fCx').checked = cfg.cx; $('fPlat').checked = cfg.plat;
+  $('fLed').checked = cfg.led; $('fMsg').checked = cfg.msg; $('fGroup').checked = cfg.group; $('fCx').checked = cfg.cx; $('fPlat').checked = cfg.plat; $('fSplit').checked = cfg.split;
   document.querySelectorAll('input[name=lang]').forEach(el => { el.checked = el.value === cfg.lang; });
   $('fModes').querySelectorAll('input').forEach(el => { el.checked = !cfg.hide.includes(el.value); });
   $('placeNow').textContent = cfg.name + ' (' + coordName(cfg.lat, cfg.lon) + ')';
@@ -1006,6 +1034,7 @@ function buildPanel() {
   $('fMsg').addEventListener('change', () => update({ msg: $('fMsg').checked }));
   $('fCx').addEventListener('change', () => update({ cx: $('fCx').checked }));
   $('fPlat').addEventListener('change', () => update({ plat: $('fPlat').checked }));
+  $('fSplit').addEventListener('change', () => update({ split: $('fSplit').checked }));
   $('fGroup').addEventListener('change', () => update({ group: $('fGroup').checked }));
   document.querySelectorAll('input[name=lang]').forEach(el => el.addEventListener('change', () => update({ lang: el.value })));
   $('bCopy').addEventListener('click', async () => {
