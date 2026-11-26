@@ -7,8 +7,13 @@
 <title>Avgångar – Stockholm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;600;700&family=Doto:wght@800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@800&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/D-DIN.otf" as="font" type="font/otf" crossorigin>
+<link rel="preload" href="fonts/D-DIN-Bold.otf" as="font" type="font/otf" crossorigin>
 <style>
+/* D-DIN (SIL Open Font License 1.1, see fonts/D-DIN-OFL.txt), an open version of the DIN 1451 sign typeface. */
+@font-face { font-family: "D-DIN"; src: url(fonts/D-DIN.otf) format("opentype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "D-DIN"; src: url(fonts/D-DIN-Bold.otf) format("opentype"); font-weight: 700; font-display: swap; }
 :root {
   --u: 64px;       /* base unit from the viewport: header, footer, margins */
   --row-h: 64px;   /* type scale of the departure rows */
@@ -20,9 +25,9 @@
   --grey: #8d8d8d;
   --line: #2a2a2a;
   --red: #ff4d3d;
-  /* Arimo is loaded so every device uses the same font; screens without Helvetica or Arial otherwise
-     fall back to their own sans-serif with other letter widths. */
-  --sans: "Arimo", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  /* D-DIN is hosted with the page so every device uses the same font; screens without Helvetica or
+     Arial otherwise fall back to their own sans-serif with other letter widths. */
+  --sans: "D-DIN", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
   --sign: var(--sans);
 }
 body.led { --sign: "Doto", var(--sans); }

@@ -8,7 +8,8 @@ This is an independent project. It is not made or endorsed by SL (Storstockholms
 
 ## Files
 
-- `stockholm-transport/index.html` is the whole site: markup, styles and script.
+- `stockholm-transport/index.html` is the page: markup, styles and script.
+- `stockholm-transport/fonts/` holds the D-DIN font files and their licence. Publish them together with the page.
 - `.claude/launch.json` is a preview configuration for Claude Code.
 
 ## Run locally
@@ -90,7 +91,7 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 
 - The page has no server of its own and no analytics. Settings and the stop list are saved in the browser's local storage.
 - The browser sends stop ids and place searches to SL. The chosen coordinates are not sent; distances are calculated in the browser. The same applies to the device position when following is on.
-- The dot-matrix typeface, [Doto](https://github.com/oliverlalan/Doto), and the plain typeface, [Arimo](https://fonts.google.com/specimen/Arimo), both under the SIL Open Font License 1.1, are loaded from Google Fonts, so Google sees the visitor's IP address. To avoid that, host the font files yourself and change the stylesheet link in `index.html`.
+- The plain typeface, [D-DIN](https://www.datto.com/fonts/d-din), is hosted with the page. The dot-matrix typeface, [Doto](https://github.com/oliverlalan/Doto), is loaded from Google Fonts, so Google sees the visitor's IP address. To avoid that, host the Doto font file yourself and change the stylesheet link in `index.html`.
 
 ## Deploy
 
@@ -98,4 +99,4 @@ Copy the `stockholm-transport` folder to any static web host. There is no build 
 
 ## Licence
 
-The code is released under the [MIT licence](LICENSE). The licence covers the code only. SL data is covered by the Trafiklab terms linked under Data sources, and the Doto and Arimo typefaces by the SIL Open Font License 1.1.
+The code is released under the [MIT licence](LICENSE). The licence covers the code only. SL data is covered by the Trafiklab terms linked under Data sources, and the Doto and D-DIN typefaces by the SIL Open Font License 1.1 (D-DIN's copy is in `stockholm-transport/fonts/`).
