@@ -2,6 +2,10 @@
 
 Changes to the Stockholm transport departure screen, newest first.
 
+## 2026-11-26
+
+- "Följ min position" now stays on after a reload on iPhone. Safari reports location access as undecided after every reload, which greyed out the setting even while access was still allowed. The page now remembers that access was given on the device and asks for the position directly: Safari answers without a dialog while it still allows access, and shows its permission dialog again once it has forgotten. Declining the dialog turns following off.
+
 ## 2026-11-25
 
 - Sections are no longer split across two columns when they can all be kept whole. Before, the board preferred short columns, so a three-type location such as metro, train and bus could get bus split over two columns and an empty half column under the metro. Now each type gets its own column whenever it fits.

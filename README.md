@@ -58,7 +58,8 @@ Keyboard: `S` opens settings, `F` toggles full screen.
 On a phone, tablet or laptop, "Följ min position" in the settings panel moves the board to the device's current position each time the page is opened or shown again (unlocking the phone, switching back to the tab or window). The page itself is not reloaded; only departures are fetched again.
 
 - "Använd min position" turns following on. Choosing an address or stop, or opening a link to another place, turns it off.
-- The setting is greyed out until the browser allows location access, and the page only reads the position when access is already allowed, so it never shows a permission prompt on its own. Safari forgets the permission after about a day if the site is set to "Ask"; tap "Använd min position" again to resume.
+- The setting is greyed out until location access has been given once on the device, or while the browser blocks it. Once given, the setting stays on across reloads, even though Safari reports access as undecided after every reload.
+- With following on, the page asks for the position when it is opened or shown again. If the browser still allows it, the position comes back with no dialog. If the browser has forgotten the permission (Safari does after about a day when the site is set to "Ask"), the browser shows its permission dialog again. Declining it turns following off, so the page does not keep asking.
 - Moves under 75 metres are ignored, and the position is read at most every 30 seconds.
 - The setting is saved on the device and is not part of the link, so a shared link or a wall screen never follows anyone's location.
 

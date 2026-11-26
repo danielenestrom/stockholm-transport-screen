@@ -861,20 +861,29 @@ function pickPlace(s) {
 }
 
 /* Follow my location: a per-device choice, kept out of links so a shared link or a wall
-   screen never starts tracking. The position is only read when the browser already allows
-   it, so opening the page never shows a permission prompt. */
+   screen never starts tracking. The setting needs location access to have been given once on
+   this device. Safari reports access as undecided after every reload even while it still
+   allows it, so the page remembers that access was given and, with following on, simply asks
+   for the position: Safari answers at once or shows its permission dialog again. */
 const FOLLOW_KEY = 'stockholm-transport.follow';
+const GEO_OK_KEY = 'stockholm-transport.geo-ok';
 const FOLLOW_MIN_MS = 30000;    // focus, visibility and pageshow often fire together
 const FOLLOW_MOVE_M = 75;       // smaller moves are GPS jitter
 const FOLLOW_MAX_ACC_M = 1500;  // a fix this coarse would pick the wrong stops
-let follow = false, geoPerm = navigator.geolocation ? 'unknown' : 'unsupported', lastFollow = 0;
-try { follow = localStorage.getItem(FOLLOW_KEY) === '1'; } catch (e) {}
+let follow = false, geoOk = false, geoPerm = navigator.geolocation ? 'unknown' : 'unsupported';
+let lastFollow = 0, followBusy = false;
+try { follow = localStorage.getItem(FOLLOW_KEY) === '1'; geoOk = localStorage.getItem(GEO_OK_KEY) === '1'; } catch (e) {}
 function setFollow(on) {
   follow = on;
   try { localStorage.setItem(FOLLOW_KEY, on ? '1' : '0'); } catch (e) {}
   syncFollow();
 }
-const canFollow = () => geoPerm === 'granted';
+function geoGranted() {
+  geoOk = true;
+  try { localStorage.setItem(GEO_OK_KEY, '1'); } catch (e) {}
+  if (geoPerm !== 'granted') { geoPerm = 'granted'; syncFollow(); }
+}
+const canFollow = () => geoPerm === 'granted' || (geoOk && geoPerm !== 'denied' && geoPerm !== 'unsupported');
 function syncFollow() {
   $('fFollow').disabled = !canFollow();
   $('fFollow').checked = follow && canFollow();
@@ -885,22 +894,26 @@ async function watchPermission() {
   if (!navigator.geolocation || !navigator.permissions || !navigator.permissions.query) return;
   try {
     const st = await navigator.permissions.query({ name: 'geolocation' });
-    const apply = () => { geoPerm = st.state; syncFollow(); followNow(true); };
+    const apply = () => { geoPerm = st.state; syncFollow(); followNow(); };
     st.addEventListener('change', apply);
     apply();
   } catch (e) {}
 }
-function geoError(e) { if (e && e.code === 1) { geoPerm = 'denied'; syncFollow(); } }
+// Declining the dialog turns following off, so the page does not ask every time it is opened.
+function geoError(e) { if (e && e.code === 1) { geoPerm = 'denied'; setFollow(false); } }
 function followNow(force) {
-  if (!follow || !canFollow() || document.visibilityState !== 'visible') return;
+  if (!follow || !canFollow() || followBusy || document.visibilityState !== 'visible') return;
   if (!force && Date.now() - lastFollow < FOLLOW_MIN_MS) return;
   lastFollow = Date.now();
+  followBusy = true;   // one request at a time, so an open dialog is not stacked with another
   navigator.geolocation.getCurrentPosition(p => {
+    followBusy = false;
+    geoGranted();
     const { latitude: lat, longitude: lon, accuracy } = p.coords;
     if (!follow || accuracy > FOLLOW_MAX_ACC_M) return;
     if (distance(cfg.lat, cfg.lon, lat, lon) < FOLLOW_MOVE_M && cfg.name === t('myLocation')) return;
     update({ lat, lon, name: t('myLocation') });
-  }, geoError, { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 });
+  }, e => { followBusy = false; geoError(e); }, { enableHighAccuracy: true, maximumAge: 30000, timeout: 15000 });
 }
 
 function buildPanel() {
@@ -917,7 +930,7 @@ function buildPanel() {
     $('placeNow').textContent = t('locating');
     navigator.geolocation.getCurrentPosition(
       p => {
-        geoPerm = 'granted';   // also covers browsers without the Permissions API
+        geoGranted();
         lastFollow = Date.now();
         update({ lat: p.coords.latitude, lon: p.coords.longitude, name: t('myLocation') });
         setFollow(true);
@@ -975,7 +988,7 @@ async function start() {
   if (init.first) openPanel(true);   // nothing chosen yet: ask for a location
   if (init.elsewhere) setFollow(false);
   refresh();
-  watchPermission();
+  watchPermission().then(() => followNow());   // also runs where the Permissions API is missing
   setInterval(render, 1000);
   addEventListener('resize', render);
   addEventListener('hashchange', () => {
