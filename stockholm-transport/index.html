@@ -120,6 +120,16 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
   border-left: 1px solid #333; z-index: 10; overflow-y: auto; padding: 20px 22px 28px; font-size: 15px; cursor: auto; }
 #panel h2 { margin: 0 0 16px; font-size: 20px; display: flex; justify-content: space-between; align-items: center; }
 #panel h3 { margin: 22px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9a9a9a; font-weight: 600; }
+/* Filters for single lines and stops are for the few who need them, so they start closed. */
+#dDirs { margin: 22px 0 0; }
+#dDirs summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 4px 0 8px;
+  font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9a9a9a; font-weight: 600; }
+#dDirs summary::-webkit-details-marker { display: none; }
+#dDirs summary::before { content: ''; width: 0; height: 0; border: 5px solid transparent; border-left: 7px solid currentColor; border-right: 0;
+  transition: transform .15s; }
+#dDirs[open] summary::before { transform: rotate(90deg); }
+#dDirs summary:hover { color: #ccc; }
+#dirsState { color: var(--amber); text-transform: none; letter-spacing: 0; font-weight: 400; }
 #panel label { display: block; }
 #panel input[type=text], #panel input[type=number], #panel select {
   width: 100%; padding: 9px 10px; border-radius: 6px; border: 1px solid #444; background: #0c0c0c; color: #eee; font: inherit; }
@@ -199,11 +209,13 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
   <h3 data-t="modes"></h3>
   <div id="fModes"></div>
 
-  <h3 data-t="dirsTitle"></h3>
-  <div class="hint" data-t="dirsHint" style="margin:0 0 6px"></div>
-  <div class="rowbtns" style="margin:0 0 8px"><button class="btn" id="bDirAll" type="button" data-t="dirsAll"></button><button class="btn" id="bDirNone" type="button" data-t="dirsNone"></button></div>
-  <div class="hint" id="dirsMode" style="margin:0 0 6px"></div>
-  <div id="fDirs"></div>
+  <details id="dDirs">
+    <summary><span data-t="dirsTitle"></span><span id="dirsState"></span></summary>
+    <div class="hint" data-t="dirsHint" style="margin:0 0 6px"></div>
+    <div class="rowbtns" style="margin:0 0 8px"><button class="btn" id="bDirAll" type="button" data-t="dirsAll"></button><button class="btn" id="bDirNone" type="button" data-t="dirsNone"></button></div>
+    <div class="hint" id="dirsMode" style="margin:0 0 6px"></div>
+    <div id="fDirs"></div>
+  </details>
 
   <h3 data-t="language"></h3>
   <div class="inline">
@@ -304,7 +316,7 @@ const T = {
     followNeedsGeo: 'Tryck på Använd min position och tillåt platsåtkomst för att slå på.',
     followNoGeo: 'Webbläsaren kan inte hämta din position.',
     radius: 'Radie', stopsIn: '{n} hållplatser inom radien', stopsCapped: '{n} hållplatser inom radien. Högst {max} med avgångar visas: stationer och bryggor först, sedan de närmaste busshållplatserna.',
-    dirsTitle: 'Riktningar', dirsHint: 'Avmarkera en riktning för att dölja den. Går riktningen från flera hållplatser kan du välja hållplats under den. Listan visar linjerna i närheten just nu.', dirN: 'riktning {n}',
+    dirsTitle: 'Anpassa linjer och hållplatser', dirsActive: '· filter på', dirsHint: 'Avmarkera en riktning för att dölja den. Går riktningen från flera hållplatser kan du välja hållplats under den. Listan visar linjerna i närheten just nu. Markera alla återställer filtret.', dirN: 'riktning {n}',
     dirsAll: 'Markera alla', dirsNone: 'Avmarkera alla', dirsOnly: 'Bara markerade riktningar visas. Linjer som dyker upp senare visas inte förrän du markerar dem.',
     modes: 'Trafikslag', language: 'Språk', display: 'Visning',
     window: 'Visa avgångar inom',
@@ -339,7 +351,7 @@ const T = {
     followNeedsGeo: 'Tap Use my location and allow location access to turn this on.',
     followNoGeo: 'This browser cannot get your location.',
     radius: 'Radius', stopsIn: '{n} stops within the radius', stopsCapped: '{n} stops within the radius. At most {max} with departures are shown: stations and piers first, then the nearest bus stops.',
-    dirsTitle: 'Directions', dirsHint: 'Untick a direction to hide it. When a direction leaves from several stops, you can choose stops under it. The list shows the lines nearby right now.', dirN: 'direction {n}',
+    dirsTitle: 'Customise lines and stops', dirsActive: '· filter on', dirsHint: 'Untick a direction to hide it. When a direction leaves from several stops, you can choose stops under it. The list shows the lines nearby right now. Select all resets the filter.', dirN: 'direction {n}',
     dirsAll: 'Select all', dirsNone: 'Clear all', dirsOnly: 'Only ticked directions are shown. Lines that appear later stay hidden until you tick them.',
     modes: 'Transport types', language: 'Language', display: 'Display',
     window: 'Show departures within',
@@ -1007,6 +1019,10 @@ function siteName(id) {
   return s ? s[1] : '#' + id;
 }
 function syncDirs() {
+  const active = cfg.dirmode === 'show' || cfg.dirs.length > 0;
+  $('dirsState').textContent = active ? t('dirsActive') : '';
+  $('dirsMode').textContent = cfg.dirmode === 'show' ? t('dirsOnly') : '';
+  if (!$('dDirs').open) return;   // the list is only built while the section is open
   const lines = new Map();
   const entry = (mode, line, group) => {
     let e = [...lines.values()].find(x => x.line === line && (!mode || !x.mode || x.mode === mode));
@@ -1060,7 +1076,6 @@ function syncDirs() {
       : main.dataset.one ? main.dataset.one.split(' ').every(id => dirShown(set, l, c, +id)) : dirShown(set, l, c, null);
     main.indeterminate = subs.length > 0 && on > 0 && on < subs.length;
   }
-  $('dirsMode').textContent = cfg.dirmode === 'show' ? t('dirsOnly') : '';
 }
 /* One checkbox changed. Entries mean "hidden" in hide mode and "shown" in show mode; a per-stop
    change on a direction that is listed for every stop splits that entry into one per other stop. */
@@ -1194,6 +1209,12 @@ function buildPanel() {
     '<label class="opt"><input type="checkbox" value="' + m + '">' + ICON[m] + '<span data-m="' + m + '"></span></label>').join('');
   $('fDirs').addEventListener('change', e => { if (e.target.matches('input')) changeDir(e.target); });
   $('bDirAll').addEventListener('click', () => update({ dirmode: 'hide', dirs: [] }));
+  // The open or closed state is remembered on the device only; it does not change the board.
+  try { $('dDirs').open = localStorage.getItem(STORE + '.dirsOpen') === '1'; } catch (e) {}
+  $('dDirs').addEventListener('toggle', () => {
+    try { localStorage.setItem(STORE + '.dirsOpen', $('dDirs').open ? '1' : '0'); } catch (e) {}
+    syncDirs();
+  });
   $('bDirNone').addEventListener('click', () => update({ dirmode: 'show', dirs: [] }));
   $('fModes').addEventListener('change', () => {
     update({ hide: [...$('fModes').querySelectorAll('input')].filter(el => !el.checked).map(el => el.value) });
