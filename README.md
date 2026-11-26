@@ -45,7 +45,8 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 | `r` | Radius in metres | 500 |
 | `hide` | Transport types to hide: `metro`, `train`, `tram`, `bus`, `boat` | none |
 | `show` | Alternative to `hide`: the only types to show | all |
-| `hidedir` | Directions to hide, as line and SL direction code `1` or `2`, for example `76:1,17:2` | none |
+| `hidedir` | Directions to hide, as line and SL direction code `1` or `2`, for example `76:1,17:2`. Add `@` and SL's stop id to hide a direction at one stop only, for example `714:1@7037` | none |
+| `showdir` | Instead of `hidedir`: the only directions to show, in the same form. Empty shows nothing | |
 | `lang` | `sv` or `en` | `sv` |
 | `win` | Show departures within this many minutes | 60 |
 | `walk` | `0` also shows departures that leave before you can walk to the stop | on |
@@ -78,6 +79,8 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 - Departures are grouped by stop, nearest first. Each stop's header shows its name, the transport types it serves and the walking time, so the rows only show line, destination, platform or stand, and times. Within a stop, departures are listed by transport type and then by time. Stops that SL lists separately under the same name, such as a metro station and a bus stop, share one block.
 - Metro and commuter trains get one block per direction, with the direction under the stop name, for example "mot Hässelby strand". The direction is SL's end station for each line in that direction, so a block can list several. Each metro line colour (green, red, blue) is split on its own, and the stop's other departures follow in one block. Turn this off with "Dela upp tunnelbana och pendeltåg per riktning" (`split=0`).
 - Under "Riktningar" in the settings panel, each line nearby is listed with the destinations it has in each direction. Unticking a direction hides it from the board and adds it to `hidedir` in the link. Direction codes mean different things on different lines, so use the panel rather than guessing them. A hidden direction stays in the list, so it can be turned back on, even when the line has no departures at the moment.
+- A direction that leaves from more than one stop nearby has a checkbox per stop under it, so it can be hidden at some stops and kept at others. The direction filter is applied before the nearest-stop rule, so a direction hidden at the nearest stop is shown from the next stop that has it. Example: bus 714 towards Huddinge station from Vistabergs allé, and back towards Fredriksdal from Huddinge.
+- "Markera alla" shows every direction again. "Avmarkera alla" switches to showing only what is ticked afterwards (`showdir` in the link). In that mode, lines that appear later stay hidden until they are ticked, which suits a board that should only show a few chosen trips.
 - With "Gruppera avgångar per hållplats" turned off (`group=0`), departures are grouped by transport type instead, and each row shows its stop and walking time.
 - Automatic text size picks the largest size at which every row fits, and never goes below a size readable from a distance. If rows still do not fit, those from the farthest stops are dropped first. The text shrinks at once when rows no longer fit, but only grows after the larger size has fitted for three minutes.
 - Each destination is shown at full size when it fits its column. Otherwise it steps down to 84 % and then 71 % of full size, only as far as needed. A name a few pixels too wide gets slightly tighter letters, and a name that does not fit even then scrolls slowly to its end and back, with a pause at each end. Scrolling is off when the device asks for reduced motion.

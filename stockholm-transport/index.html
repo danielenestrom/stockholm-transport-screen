@@ -137,6 +137,9 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 #fDirs .badge { --row-h: 34px; margin-top: 4px; }
 #fDirs .ldo { min-width: 0; }
 #fDirs .opt { padding: 4px 0; }
+#fDirs .lds { display: flex; flex-wrap: wrap; gap: 0 14px; margin: -2px 0 4px 27px; }
+#fDirs .lds label { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 13px; color: #bbb; cursor: pointer; }
+#panel #fDirs .lds input { width: 14px; height: 14px; }
 .btn { border: 1px solid #555; background: #262626; color: #eee; border-radius: 6px; padding: 9px 12px; font: inherit; cursor: pointer; }
 .btn:hover { background: #363636; }
 .btn.primary { background: var(--amber); border-color: var(--amber); color: #000; font-weight: 600; }
@@ -198,6 +201,8 @@ body.idle .ctl { opacity: 0; pointer-events: none; }
 
   <h3 data-t="dirsTitle"></h3>
   <div class="hint" data-t="dirsHint" style="margin:0 0 6px"></div>
+  <div class="rowbtns" style="margin:0 0 8px"><button class="btn" id="bDirAll" type="button" data-t="dirsAll"></button><button class="btn" id="bDirNone" type="button" data-t="dirsNone"></button></div>
+  <div class="hint" id="dirsMode" style="margin:0 0 6px"></div>
   <div id="fDirs"></div>
 
   <h3 data-t="language"></h3>
@@ -251,7 +256,7 @@ const REFRESH_MS = 30000;   // shortest refresh interval; grows with the number 
 const IDLE_POLL_MS = 5 * 60000;   // stops with nothing to show are asked less often
 const SITES_TTL = 24 * 3600 * 1000;
 const DEFAULTS = { lat: 59.3312, lon: 18.0592, name: 'T-Centralen', r: 500, hide: [], lang: 'sv',
-                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false, plat: true, split: true, hidedir: [] };
+                   win: 60, walk: true, size: 'a', led: true, msg: true, group: true, cx: false, plat: true, split: true, dirmode: 'hide', dirs: [] };
 
 /* Line colours. Metro and commuter train follow the colours used on SL maps. */
 const COL = {
@@ -299,7 +304,8 @@ const T = {
     followNeedsGeo: 'Tryck på Använd min position och tillåt platsåtkomst för att slå på.',
     followNoGeo: 'Webbläsaren kan inte hämta din position.',
     radius: 'Radie', stopsIn: '{n} hållplatser inom radien', stopsCapped: '{n} hållplatser inom radien. Högst {max} med avgångar visas: stationer och bryggor först, sedan de närmaste busshållplatserna.',
-    dirsTitle: 'Riktningar', dirsHint: 'Avmarkera en riktning för att dölja den. Listan visar linjerna i närheten just nu.', dirN: 'riktning {n}',
+    dirsTitle: 'Riktningar', dirsHint: 'Avmarkera en riktning för att dölja den. Går riktningen från flera hållplatser kan du välja hållplats under den. Listan visar linjerna i närheten just nu.', dirN: 'riktning {n}',
+    dirsAll: 'Markera alla', dirsNone: 'Avmarkera alla', dirsOnly: 'Bara markerade riktningar visas. Linjer som dyker upp senare visas inte förrän du markerar dem.',
     modes: 'Trafikslag', language: 'Språk', display: 'Visning',
     window: 'Visa avgångar inom',
     walkOpt: 'Dölj avgångar som man inte hinner gå till', walkHint: 'Gångtiden räknas från avståndet till hållplatsen.',
@@ -333,7 +339,8 @@ const T = {
     followNeedsGeo: 'Tap Use my location and allow location access to turn this on.',
     followNoGeo: 'This browser cannot get your location.',
     radius: 'Radius', stopsIn: '{n} stops within the radius', stopsCapped: '{n} stops within the radius. At most {max} with departures are shown: stations and piers first, then the nearest bus stops.',
-    dirsTitle: 'Directions', dirsHint: 'Untick a direction to hide it. The list shows the lines nearby right now.', dirN: 'direction {n}',
+    dirsTitle: 'Directions', dirsHint: 'Untick a direction to hide it. When a direction leaves from several stops, you can choose stops under it. The list shows the lines nearby right now.', dirN: 'direction {n}',
+    dirsAll: 'Select all', dirsNone: 'Clear all', dirsOnly: 'Only ticked directions are shown. Lines that appear later stay hidden until you tick them.',
     modes: 'Transport types', language: 'Language', display: 'Display',
     window: 'Show departures within',
     walkOpt: 'Hide departures you cannot walk to in time', walkHint: 'Walking time is estimated from the distance to the stop.',
@@ -378,6 +385,7 @@ const hhmm = w => { const d = new Date(w); return pad(d.getUTCHours()) + ':' + p
 const STORE = 'stockholm-transport.settings';
 const coordName = (lat, lon) => lat.toFixed(4) + ', ' + lon.toFixed(4);
 
+const DIR_KEY = /^[0-9A-Za-zÅÄÖåäö]{1,6}:[12](@\d{1,9})?$/;
 function sanitize(s) {
   const o = { ...DEFAULTS, ...s };
   o.lat = +o.lat; o.lon = +o.lon;
@@ -385,8 +393,13 @@ function sanitize(s) {
   o.name = String(o.name || coordName(o.lat, o.lon)).slice(0, 80);
   o.r = clamp(Math.round(+o.r) || DEFAULTS.r, 50, 5000);
   o.hide = (Array.isArray(o.hide) ? o.hide : []).filter(m => MODES.includes(m));
-  // Hidden directions as 'line:direction code', for example '76:1'.
-  o.hidedir = [...new Set((Array.isArray(o.hidedir) ? o.hidedir : []).map(String).filter(k => /^[0-9A-Za-zÅÄÖåäö]{1,6}:[12]$/.test(k)))].slice(0, 200);
+  // Direction filter. Entries are 'line:direction code' for every stop, such as '76:1', or
+  // 'line:code@stop id' for one stop. In 'hide' mode the entries are hidden and everything else is
+  // shown; in 'show' mode only the entries are shown. Settings saved before this used 'hidedir'.
+  o.dirmode = o.dirmode === 'show' ? 'show' : 'hide';
+  const dirs = Array.isArray(o.dirs) && o.dirs.length ? o.dirs : Array.isArray(o.hidedir) ? o.hidedir : [];
+  o.dirs = [...new Set(dirs.map(String).filter(k => DIR_KEY.test(k)))].slice(0, 300);
+  delete o.hidedir;
   o.lang = o.lang === 'en' ? 'en' : 'sv';
   o.win = clamp(Math.round(+o.win) || DEFAULTS.win, 10, 240);
   o.size = ['a', 's', 'm', 'l', 'x'].includes(o.size) ? o.size : 'a';
@@ -398,14 +411,16 @@ function loadStored() {
 }
 function readHash() {
   const p = new URLSearchParams(location.hash.replace(/^#!?/, ''));
-  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx', 'plat', 'split', 'hidedir'];
+  const keys = ['lat', 'lon', 'name', 'addr', 'r', 'hide', 'show', 'lang', 'win', 'walk', 'size', 'led', 'msg', 'group', 'cx', 'plat', 'split', 'hidedir', 'showdir'];
   if (!keys.some(k => p.has(k))) return null;
   const o = {};
   if (p.has('lat') && p.has('lon')) { o.lat = +p.get('lat'); o.lon = +p.get('lon'); o.name = p.get('name') || coordName(o.lat, o.lon); }
   else if (p.has('addr')) o.addr = p.get('addr');
   for (const k of ['r', 'win']) if (p.has(k)) o[k] = +p.get(k);
   if (p.has('hide')) o.hide = p.get('hide').split(',').map(s => s.trim());
-  if (p.has('hidedir')) o.hidedir = p.get('hidedir').split(',').map(s => s.trim()).filter(Boolean);
+  const list = k => p.get(k).split(',').map(s => s.trim()).filter(Boolean);
+  if (p.has('hidedir')) { o.dirmode = 'hide'; o.dirs = list('hidedir'); }
+  if (p.has('showdir')) { o.dirmode = 'show'; o.dirs = list('showdir'); }
   if (p.has('show')) { const show = p.get('show').split(',').map(s => s.trim()); o.hide = MODES.filter(m => !show.includes(m)); }
   if (p.has('lang')) o.lang = p.get('lang');
   if (p.has('size')) o.size = p.get('size');
@@ -417,7 +432,8 @@ function hashFor(c) {
   p.set('lat', c.lat.toFixed(5)); p.set('lon', c.lon.toFixed(5)); p.set('name', c.name);
   if (c.r !== DEFAULTS.r) p.set('r', c.r);
   if (c.hide.length) p.set('hide', c.hide.join(','));
-  if (c.hidedir.length) p.set('hidedir', c.hidedir.join(','));
+  if (c.dirmode === 'show') p.set('showdir', c.dirs.join(','));   // kept when empty: nothing is shown
+  else if (c.dirs.length) p.set('hidedir', c.dirs.join(','));
   if (c.lang !== DEFAULTS.lang) p.set('lang', c.lang);
   if (c.win !== DEFAULTS.win) p.set('win', c.win);
   if (!c.walk) p.set('walk', 0);
@@ -428,7 +444,7 @@ function hashFor(c) {
   if (c.cx) p.set('cx', 1);
   if (!c.plat) p.set('plat', 0);
   if (!c.split) p.set('split', 0);
-  return '#' + p.toString().replace(/%2C/g, ',').replace(/%3A/g, ':');
+  return '#' + p.toString().replace(/%2C/g, ',').replace(/%3A/g, ':').replace(/%40/g, '@');
 }
 function initialConfig() {
   const stored = loadStored(), hash = readHash();
@@ -652,12 +668,14 @@ async function refresh() {
 
 /* ---------- Board ---------- */
 function buildSections(now) {
-  const seen = new Set(), groups = new Map(), hiddenDir = new Set(cfg.hidedir);
+  const seen = new Set(), groups = new Map(), dirSet = new Set(cfg.dirs);
   const byDistance = [...near].sort((a, b) => a.dist - b.dist);   // a departure listed by two stops counts for the nearer
   for (const site of byDistance) for (const d of depsBySite.get(site.id) || []) {
     if (cfg.hide.includes(d.mode) || seen.has(d.id)) continue;
     seen.add(d.id);
-    if (hiddenDir.has(d.line + ':' + d.dirCode)) continue;   // a direction turned off in the settings
+    // A direction turned off in the settings. Filtering comes before the nearest-stop rule below, so a
+    // direction turned off at the nearest stop is shown from the next stop that has it.
+    if (!dirShown(dirSet, d.line, d.dirCode, site.id)) continue;
     if (d.cancelled && !cfg.cx) continue;   // SL often lists a cancelled trip next to its replacement
     const mins = (d.when - now) / 60000;
     if (mins < -0.5 || mins > cfg.win) continue;
@@ -717,6 +735,10 @@ function buildSections(now) {
   return list;
 }
 
+function dirShown(set, line, code, siteId) {
+  const g = line + ':' + code, listed = set.has(g) || (siteId != null && set.has(g + '@' + siteId));
+  return cfg.dirmode === 'show' ? listed : !listed;
+}
 let sectionsByKey = new Map();   // section key -> section, from the latest buildSections
 let boardLines = new Set();      // SL line ids with departures on the board
 const walkMin = dist => Math.max(1, Math.ceil(dist / WALK_M_PER_MIN));
@@ -897,7 +919,7 @@ function render() {
     // Largest size at which every row fits. A slightly smaller size is preferred if it keeps sections whole.
     const flow = AUTO_STEPS.find(f => fits(f, false)) || AUTO_STEPS[AUTO_STEPS.length - 1];
     const best = AUTO_STEPS.find(f => f <= flow && f >= flow - 0.11 && fits(f, true)) || flow;
-    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split, cfg.hidedir.join()].join('|');
+    const key = [W, H, cfg.lat, cfg.lon, cfg.r, cfg.win, cfg.walk, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split, cfg.dirmode, cfg.dirs.join()].join('|');
     // Shrink at once when rows no longer fit; grow only after the larger size has fitted for a while,
     // so the text size, and with it the columns, do not change every time a departure comes or goes.
     if (!auto.scale || key !== auto.key || best < auto.scale || !sections.length) auto = { scale: best, key, since: 0 };
@@ -917,7 +939,7 @@ function render() {
   if (!loaded) html = '<div class="empty">' + t('loading') + '</div>';
   else if (sections.length) {
     const cols = narrow ? layout(sections, C, R, false)
-      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split, cfg.hidedir.join()].join('|'));
+      : stickyLayout(sections, C, R, fits(scale, true), [W, H, C, R, rowH, cfg.lat, cfg.lon, cfg.r, cfg.hide.join(), cfg.group, cfg.cx, cfg.plat, cfg.split, cfg.dirmode, cfg.dirs.join()].join('|'));
     // Stretch the rows so the longest column fills the board height (type size stays the same).
     if (!narrow) slot = clamp(boardH / Math.max(1, ...cols.map(c => c.length)), rowH, rowH * 1.45);
     board.style.gridTemplateColumns = 'repeat(' + Math.min(C, Math.max(cols.length, narrow ? 1 : Math.min(C, 2))) + ', minmax(0, 1fr))';
@@ -976,38 +998,89 @@ function syncPanel() {
   syncFollow();
   syncPanelHints();
 }
-/* Directions by line: every line nearby with the destinations it has in each direction, plus any direction
-   already turned off that is not in the current data. */
-let lastDirsHtml = '';
+/* Directions by line: every line nearby with the destinations it has in each direction. A direction
+   that leaves from more than one stop also gets a checkbox per stop. Directions already in the filter
+   are listed even when the line has no departures at the moment, so they can be turned back on. */
+let lastDirsHtml = '', dirCatalog = [];
+function siteName(id) {
+  const s = (sites || []).find(x => x[0] === id);
+  return s ? s[1] : '#' + id;
+}
 function syncDirs() {
   const lines = new Map();
   const entry = (mode, line, group) => {
-    const k = MODES.indexOf(mode) + '|' + line;
-    if (!lines.has(k)) lines.set(k, { mode, line, group, dirs: new Map() });
-    return lines.get(k);
+    let e = [...lines.values()].find(x => x.line === line && (!mode || !x.mode || x.mode === mode));
+    if (!e) lines.set(MODES.indexOf(mode) + '|' + line, e = { mode, line, group, dirs: new Map() });
+    if (mode && !e.mode) Object.assign(e, { mode, group });
+    return e;
+  };
+  const dir = (e, code) => {
+    if (!e.dirs.has(code)) e.dirs.set(code, { dests: new Set(), stops: new Map() });
+    return e.dirs.get(code);
+  };
+  const stop = (d, name, id, dist) => {
+    if (!d.stops.has(name)) d.stops.set(name, { ids: new Set(), dist });
+    const st = d.stops.get(name);
+    st.ids.add(id); st.dist = Math.min(st.dist, dist);
   };
   for (const site of near) for (const d of depsBySite.get(site.id) || []) {
     if (cfg.hide.includes(d.mode) || !(d.dirCode === 1 || d.dirCode === 2)) continue;
-    const e = entry(d.mode, d.line, d.group);
-    if (!e.dirs.has(d.dirCode)) e.dirs.set(d.dirCode, new Set());
-    if (d.dest) e.dirs.get(d.dirCode).add(d.dest);   // where the trips go, not SL's direction name for the line
+    const di = dir(entry(d.mode, d.line, d.group), d.dirCode);
+    if (d.dest) di.dests.add(d.dest);   // where the trips go, not SL's direction name for the line
+    stop(di, site.name, site.id, site.dist);
   }
-  const known = new Set([...lines.values()].map(e => e.line));
-  for (const k of cfg.hidedir) {
-    const [line, code] = k.split(':');
-    const e = [...lines.values()].find(x => x.line === line) || (known.has(line) ? null : entry('', line, ''));
-    if (e && !e.dirs.has(+code)) e.dirs.set(+code, new Set());
+  for (const k of cfg.dirs) {
+    const m = /^(.+):([12])(?:@(\d+))?$/.exec(k);
+    if (!m) continue;
+    const di = dir(entry('', m[1], ''), +m[2]);
+    if (m[3] && ![...di.stops.values()].some(st => st.ids.has(+m[3]))) stop(di, siteName(+m[3]), +m[3], Infinity);
   }
-  const list = [...lines.entries()].sort((a, b) => a[0].localeCompare(b[0], 'sv', { numeric: true })).map(x => x[1]);
-  const html = list.map(e => '<div class="ld"><span class="badge" style="--c:' + (e.mode ? lineColor(e) : '#555') + '">' +
+  dirCatalog = [...lines.entries()].sort((a, b) => a[0].localeCompare(b[0], 'sv', { numeric: true })).map(x => x[1]);
+  const html = dirCatalog.map(e => '<div class="ld"><span class="badge" style="--c:' + (e.mode ? lineColor(e) : '#555') + '">' +
     (e.mode ? ICON[e.mode] : '') + '<b>' + esc(e.line) + '</b></span><div class="ldo">' +
     [...e.dirs.keys()].sort().map(code => {
-      const names = [...e.dirs.get(code)].sort((a, b) => a.localeCompare(b, 'sv'));
-      return '<label class="opt"><input type="checkbox" data-k="' + esc(e.line + ':' + code) + '"> ' +
-        esc(names.length ? t('towards') + ' ' + names.join(', ') : t('dirN', { n: code })) + '</label>';
+      const di = e.dirs.get(code), names = [...di.dests].sort((a, b) => a.localeCompare(b, 'sv'));
+      const stops = [...di.stops.entries()].sort((a, b) => a[1].dist - b[1].dist || a[0].localeCompare(b[0], 'sv'));
+      const attrs = ' data-l="' + esc(e.line) + '" data-c="' + code + '"';
+      const one = stops.length === 1 ? ' data-one="' + [...stops[0][1].ids].join(' ') + '"' : '';
+      return '<div class="ldd"><label class="opt"><input type="checkbox"' + attrs + one + '> ' +
+        esc(names.length ? t('towards') + ' ' + names.join(', ') : t('dirN', { n: code })) + '</label>' +
+        (stops.length > 1 ? '<div class="lds">' + stops.map(([name, st]) =>
+          '<label><input type="checkbox"' + attrs + ' data-s="' + [...st.ids].join(' ') + '">' + esc(name) + '</label>').join('') + '</div>' : '') +
+        '</div>';
     }).join('') + '</div></div>').join('');
   if (html !== lastDirsHtml) { $('fDirs').innerHTML = html; lastDirsHtml = html; }
-  $('fDirs').querySelectorAll('input').forEach(el => { el.checked = !cfg.hidedir.includes(el.dataset.k); });
+  const set = new Set(cfg.dirs);
+  for (const box of $('fDirs').querySelectorAll('.ldd')) {
+    const main = box.querySelector('.opt input'), l = main.dataset.l, c = main.dataset.c;
+    const subs = [...box.querySelectorAll('.lds input')];
+    for (const el of subs) el.checked = el.dataset.s.split(' ').every(id => dirShown(set, l, c, +id));
+    const on = subs.filter(el => el.checked).length;
+    main.checked = subs.length ? on === subs.length
+      : main.dataset.one ? main.dataset.one.split(' ').every(id => dirShown(set, l, c, +id)) : dirShown(set, l, c, null);
+    main.indeterminate = subs.length > 0 && on > 0 && on < subs.length;
+  }
+  $('dirsMode').textContent = cfg.dirmode === 'show' ? t('dirsOnly') : '';
+}
+/* One checkbox changed. Entries mean "hidden" in hide mode and "shown" in show mode; a per-stop
+   change on a direction that is listed for every stop splits that entry into one per other stop. */
+function changeDir(el) {
+  const set = new Set(cfg.dirs), g = el.dataset.l + ':' + el.dataset.c, listedMeansShown = cfg.dirmode === 'show';
+  if (!el.dataset.s) {
+    for (const k of [...set]) if (k === g || k.startsWith(g + '@')) set.delete(k);
+    if (el.checked === listedMeansShown) set.add(g);
+  } else {
+    const ids = el.dataset.s.split(' '), listed = el.checked === listedMeansShown;
+    if (set.has(g)) {
+      if (!listed) {
+        set.delete(g);
+        const box = el.closest('.ldd');
+        for (const other of box.querySelectorAll('.lds input')) if (other !== el)
+          for (const id of other.dataset.s.split(' ')) set.add(g + '@' + id);
+      }
+    } else for (const id of ids) listed ? set.add(g + '@' + id) : set.delete(g + '@' + id);
+  }
+  update({ dirs: [...set] });
 }
 function syncPanelHints() {
   if (!sites) { $('rHint').textContent = ''; return; }
@@ -1119,9 +1192,9 @@ function followNow(force) {
 function buildPanel() {
   $('fModes').innerHTML = MODES.map(m =>
     '<label class="opt"><input type="checkbox" value="' + m + '">' + ICON[m] + '<span data-m="' + m + '"></span></label>').join('');
-  $('fDirs').addEventListener('change', () => {
-    update({ hidedir: [...$('fDirs').querySelectorAll('input')].filter(el => !el.checked).map(el => el.dataset.k) });
-  });
+  $('fDirs').addEventListener('change', e => { if (e.target.matches('input')) changeDir(e.target); });
+  $('bDirAll').addEventListener('click', () => update({ dirmode: 'hide', dirs: [] }));
+  $('bDirNone').addEventListener('click', () => update({ dirmode: 'show', dirs: [] }));
   $('fModes').addEventListener('change', () => {
     update({ hide: [...$('fModes').querySelectorAll('input')].filter(el => !el.checked).map(el => el.value) });
   });
