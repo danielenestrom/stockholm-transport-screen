@@ -50,6 +50,7 @@ https://example.com/stockholm-transport/#lat=59.3196&lon=18.0722&name=Slussen&r=
 | `size` | Text size: `a` (automatic), `s`, `m`, `l` or `x` | `a` |
 | `led` | `0` switches from the dot-matrix typeface to a plain one | on |
 | `msg` | `0` hides disruption messages | on |
+| `group` | `0` groups departures by transport type instead of by stop | on |
 
 Keyboard: `S` opens settings, `F` toggles full screen.
 
@@ -69,6 +70,8 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 
 ## Layout rules
 
+- Departures are grouped by stop, nearest first. Each stop's header shows its name, the transport types it serves and the walking time, so the rows only show line, destination, platform or stand, and times. Within a stop, departures are listed by transport type and then by time. Stops that SL lists separately under the same name, such as a metro station and a bus stop, share one block.
+- With "Gruppera avgångar per hållplats" turned off (`group=0`), departures are grouped by transport type instead, and each row shows its stop and walking time.
 - Automatic text size picks the largest size at which every row fits, and never goes below a size readable from a distance. If rows still do not fit, those from the farthest stops are dropped first. The text shrinks at once when rows no longer fit, but only grows after the larger size has fitted for three minutes.
 - A section is only split across two columns when there is no arrangement that keeps every section whole, even if that makes the columns taller.
 - Sections keep their columns between updates, once every stop in range has been asked for departures. The board is rearranged when a departure would stay hidden for more than a minute, when a tidier arrangement (no empty column, fewer split sections) has been possible for 30 seconds, or when the screen size, location or settings change.

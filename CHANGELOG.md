@@ -4,6 +4,10 @@ Changes to the Stockholm transport departure screen, newest first.
 
 ## 2026-11-26
 
+- Departures are now grouped by stop instead of by transport type. Each stop gets its own block, nearest first, with the stop name, the transport types it serves and the walking time in the header. This shows at a glance where to walk to, and removes the stop name and walking time that were repeated on every row. A metro station and a bus stop with the same name share one block.
+- Added "Gruppera avgångar per hållplats" ("Group departures by stop") to the settings panel, on by default. Turning it off, or adding `group=0` to the link, brings back the layout grouped by transport type. Screens that open a link without `group=0` switch to the new layout the next time they load the page.
+- "cont." on a section that continues in the next column now stays visible when the section name is too long for the column.
+- Updated the README screenshot to show the new layout.
 - "Följ min position" now stays on after a reload on iPhone. Safari reports location access as undecided after every reload, which greyed out the setting even while access was still allowed. The page now remembers that access was given on the device and asks for the position directly: Safari answers without a dialog while it still allows access, and shows its permission dialog again once it has forgotten. Declining the dialog turns following off.
 
 ## 2026-11-25
