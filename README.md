@@ -78,6 +78,7 @@ Colours are set in the `COL` table in `index.html`. Metro lines use their line c
 - Sections keep their columns between updates, once every stop in range has been asked for departures. The board is rearranged when a departure would stay hidden for more than a minute, when a tidier arrangement (no empty column, fewer split sections) has been possible for 30 seconds, or when the screen size, location or settings change.
 - Walking time is the straight-line distance to the stop at 75 metres per minute. Departures that leave sooner than that are hidden.
 - A line and destination served by several stops in range is shown for the nearest stop only.
+- The footer shows only disruption messages that SL links to a line on the board, or to a stop as a whole. A message about a line that is hidden, outside the time window or not served nearby is left out.
 - Cancelled departures are hidden, and a line with only cancelled departures in the time window is left out. With "Visa inställda avgångar" turned on (`cx=1`), a row whose next departures are cancelled shows "Inställd" and the cancelled times.
 
 ## Privacy

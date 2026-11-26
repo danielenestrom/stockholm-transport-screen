@@ -4,6 +4,7 @@ Changes to the Stockholm transport departure screen, newest first.
 
 ## 2026-11-26
 
+- The footer now shows only disruption messages about lines on the board, or about a stop as a whole. Before, every message for every stop in range rotated through, including ones about lines that were hidden or not shown. SL sometimes links a message to lines it does not mention: the current message about commuter trains at night is linked to the green metro lines, so it still shows wherever those run.
 - Cancelled departures are now hidden. SL often lists a cancelled trip next to the one that replaces it at the same time, which filled the board with "Inställd" rows. To show them again, turn on "Visa inställda avgångar" ("Show cancelled departures") in the settings panel or add `cx=1` to the link. Screens pick up the change the next time they load the page.
 - Departures are now grouped by stop instead of by transport type. Each stop gets its own block, nearest first, with the stop name, the transport types it serves and the walking time in the header. This shows at a glance where to walk to, and removes the stop name and walking time that were repeated on every row. A metro station and a bus stop with the same name share one block.
 - Added "Gruppera avgångar per hållplats" ("Group departures by stop") to the settings panel, on by default. Turning it off, or adding `group=0` to the link, brings back the layout grouped by transport type. Screens that open a link without `group=0` switch to the new layout the next time they load the page.

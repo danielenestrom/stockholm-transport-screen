@@ -400,7 +400,7 @@ let cfg = DEFAULTS;
 let sites = null;                 // [[id, name, lat, lon], …]
 let near = [], nearTotal = 0;     // stops within the radius
 let depsBySite = new Map();       // site id -> departures
-let msgsBySite = new Map();       // site id -> disruption messages
+let msgsBySite = new Map();       // site id -> disruption messages: { text, lines: SL line ids it applies to }
 let pollAfter = new Map();       // site id -> earliest time for the next request
 let lastOk = 0, lastFailed = false, loaded = false, refreshSeq = 0, lastHtml = '';
 let warm = false;                 // every stop in range has been asked once since the place or settings changed
@@ -509,7 +509,7 @@ function normalize(d, site) {
   if (!isFinite(when)) return null;
   return {
     id: (d.journey && d.journey.id) + ':' + (d.stop_point && d.stop_point.id) + ':' + d.scheduled,
-    mode, line: String(d.line.designation || ''), group: d.line.group_of_lines || '',
+    mode, line: String(d.line.designation || ''), lineId: d.line.id, group: d.line.group_of_lines || '',
     dest: d.destination || '', stop: (d.stop_area && d.stop_area.name) || site.name,
     sp: (d.stop_point && d.stop_point.designation) || '', when,
     cancelled: d.state === 'CANCELLED' || (d.deviations || []).some(x => x.consequence === 'CANCELLED'),
@@ -538,7 +538,8 @@ async function refresh() {
     const site = list[i];
     const deps = (r.departures || []).map(d => normalize(d, site)).filter(Boolean);
     depsBySite.set(site.id, deps);
-    msgsBySite.set(site.id, (r.stop_deviations || []).map(m => m && m.message).filter(Boolean));
+    msgsBySite.set(site.id, (r.stop_deviations || []).filter(m => m && m.message)
+      .map(m => ({ text: m.message, lines: ((m.scope && m.scope.lines) || []).map(l => l.id) })));
   });
   // A stop that adds nothing (no departures, or only ones a nearer stop already lists, such as a
   // second entrance to the same station) is asked less often and frees its place for another stop.
@@ -606,10 +607,12 @@ function buildSections(now) {
   }
   list.forEach((s, i) => { s.rank = i; });
   sectionsByKey = new Map(list.map(s => [s.key, s]));
+  boardLines = new Set(rows.map(r => r.lineId));
   return list;
 }
 
 let sectionsByKey = new Map();   // section key -> section, from the latest buildSections
+let boardLines = new Set();      // SL line ids with departures on the board
 const walkMin = dist => Math.max(1, Math.ceil(dist / WALK_M_PER_MIN));
 
 function waterfill(counts, budget) {
@@ -825,7 +828,9 @@ function render() {
   if (html !== lastHtml) { board.innerHTML = html; lastHtml = html; }
 
   // Footer: disruption messages rotate, status on the right.
-  const msgs = cfg.msg ? [...new Set([].concat(...msgsBySite.values()))].slice(0, 8) : [];
+  // Only messages about a line on the board, or about the stop as a whole (no lines listed).
+  const msgs = cfg.msg ? [...new Set([].concat(...msgsBySite.values())
+    .filter(m => !m.lines.length || m.lines.some(id => boardLines.has(id))).map(m => m.text))].slice(0, 8) : [];
   const msg = msgs.length ? '⚠ ' + msgs[Math.floor(Date.now() / 9000) % msgs.length] : '';
   if ($('msg').textContent !== msg) $('msg').textContent = msg;
   const fetched = lastOk ? hhmm(now - (Date.now() - lastOk)) : '';
