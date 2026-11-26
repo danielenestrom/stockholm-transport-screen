@@ -4,6 +4,7 @@ Changes to the Stockholm transport departure screen, newest first.
 
 ## 2026-11-26
 
+- Updated the README screenshot to show the board grouped by stop, metro split by direction and the D-DIN typeface.
 - Plain text (stop names, platforms, headers and the footer) now uses D-DIN, an open version of the DIN 1451 typeface used on European road and rail signs. The font files are hosted with the page, so every device uses the same font. The office TVs have no Helvetica or Arial and used their own sans-serif font, with other letter widths, so text lined up differently than in a computer's browser. D-DIN is also more compact, so long stop names fit better.
 - Fixed whole stops, such as Medborgarplatsen or Skanstull, disappearing from the board for about five minutes. SL sometimes answers with an empty departure list for a stop that has departures, and the next answer is complete again. The board took the empty answer as "nothing to show here" and stopped asking that stop for five minutes. An empty answer is now only believed when it comes twice in a row; until then the stop keeps its previous times.
 - Added "Riktningar" ("Directions") to the settings panel: every line nearby is listed with a checkbox per direction, labelled with where the trips go, such as "mot Ropsten" and "mot Norra Hammarbyhamnen" for bus 76. Unticking a direction hides it from the board. The choice is saved in the link as `hidedir`, for example `hidedir=76:2`, so a wall screen can show only the directions people at that spot travel in.
@@ -14,7 +15,6 @@ Changes to the Stockholm transport departure screen, newest first.
 - Departures are now grouped by stop instead of by transport type. Each stop gets its own block, nearest first, with the stop name, the transport types it serves and the walking time in the header. This shows at a glance where to walk to, and removes the stop name and walking time that were repeated on every row. A metro station and a bus stop with the same name share one block.
 - Added "Gruppera avgångar per hållplats" ("Group departures by stop") to the settings panel, on by default. Turning it off, or adding `group=0` to the link, brings back the layout grouped by transport type. Screens that open a link without `group=0` switch to the new layout the next time they load the page.
 - "cont." on a section that continues in the next column now stays visible when the section name is too long for the column.
-- Updated the README screenshot to show the new layout.
 - "Följ min position" now stays on after a reload on iPhone. Safari reports location access as undecided after every reload, which greyed out the setting even while access was still allowed. The page now remembers that access was given on the device and asks for the position directly: Safari answers without a dialog while it still allows access, and shows its permission dialog again once it has forgotten. Declining the dialog turns following off.
 
 ## 2026-11-25
